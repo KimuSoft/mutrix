@@ -16,7 +16,8 @@ import {
 import type { Report } from "../shared/types";
 import { attachSummaries, parseSummaries } from "../shared/summaries";
 import { buildLayout, parentChain, reportIndex, type Filters } from "./chart/layout";
-import { MatrixChart, type ChartCamera } from "./chart/MatrixChart";
+import { MatrixChart } from "./chart/MatrixChart";
+import { identityCamera, type ChartCamera } from "./chart/camera";
 import { Explorer } from "./components/Explorer";
 import { Inspector } from "./components/Inspector";
 import { DiagnosticsDialog } from "./components/DiagnosticsDialog";
@@ -35,7 +36,7 @@ export function App({ initialReport }: { initialReport: Report }) {
   const [selected, setSelected] = useState(report.rootId);
   const [focus, setFocus] = useState(report.rootId);
   const [history, setHistory] = useState<ViewSnapshot[]>([]);
-  const currentCamera = useRef<ChartCamera>({ x: 0, y: 0, k: 1 });
+  const currentCamera = useRef<ChartCamera>(identityCamera());
   const [initialCamera, setInitialCamera] = useState<ChartCamera>(currentCamera.current);
   const [changes, setChanges] = useState(report.meta.mode === "changes");
   const [filters, setFilters] = useState<Filters>({ changed: false, extension: "", sort: "path" });
@@ -77,7 +78,7 @@ export function App({ initialReport }: { initialReport: Report }) {
       ]);
       setFocus(id);
     }
-    setInitialCamera({ x: 0, y: 0, k: 1 });
+    setInitialCamera(identityCamera());
     setSelected(id);
   };
   const goBack = () => {

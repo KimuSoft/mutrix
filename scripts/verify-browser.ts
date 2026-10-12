@@ -10,6 +10,8 @@ import { fileIcon } from "../src/viewer/lib/file-icons";
 import { buildLayout } from "../src/viewer/chart/layout";
 import { fitColumns, projectColumn } from "../src/viewer/chart/columns";
 import { nodeFill } from "../src/shared/colors";
+import type { ChartCamera } from "../src/viewer/chart/camera";
+import { verifyAxisNavigation, verifyTouchNavigation } from "./verify-navigation";
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -47,7 +49,11 @@ async function painted() {
 async function chartReady() {
   await page.waitForFunction(() => {
     const canvas = document.querySelector<HTMLCanvasElement>(".matrix-host > canvas");
-    return canvas && canvas.getContext("2d")!.getImageData(15, 15, 1, 1).data[3] > 0;
+    return (
+      canvas &&
+      canvas.width > 0 &&
+      (window as unknown as { __mutrixMetrics: { camera?: ChartCamera } }).__mutrixMetrics.camera
+    );
   });
   await page.evaluate(
     () =>
@@ -57,22 +63,25 @@ async function chartReady() {
   );
 }
 async function camera() {
-  return page.locator(".matrix-host > canvas").evaluate((element) => {
-    const value = (element as HTMLCanvasElement & { __zoom: { k: number; x: number; y: number } })
-      .__zoom;
-    return { k: value.k, x: value.x, y: value.y };
-  });
+  await chartReady();
+  return page.evaluate(() => ({
+    ...(window as unknown as { __mutrixMetrics: { camera: ChartCamera } }).__mutrixMetrics.camera,
+  }));
 }
-async function assertCamera(expected: { k: number; x: number; y: number }) {
+async function assertCamera(expected: ChartCamera) {
   const restored = await camera();
   assert(
-    Math.abs(restored.k - expected.k) < 0.001 &&
+    Math.abs(restored.kx - expected.kx) < 0.001 &&
+      Math.abs(restored.ky - expected.ky) < 0.001 &&
       Math.abs(restored.x - expected.x) < 0.5 &&
       Math.abs(restored.y - expected.y) < 0.5,
     `Previous camera was not restored: ${JSON.stringify({ expected, restored })}`,
   );
 }
 async function zoomAndPan() {
+  await page.getByRole("button", { name: "배율 조정", exact: true }).click();
+  await page.getByRole("button", { name: "가로 확대", exact: true }).click();
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
   const box = await page.locator(".matrix-host > canvas").boundingBox();
   assert(box, "Canvas missing before pan");
@@ -112,12 +121,13 @@ try {
   await page.locator(".project-label").click();
   assert((await guide.count()) === 0, "Outside click did not close chart help");
   const fonts = await page
-    .locator("code, .inspector-title p, .branch-label, .chart-controls > span")
+    .locator("code, .inspector-title p, .branch-label, .zoom-trigger")
     .evaluateAll((elements) => elements.map((element) => getComputedStyle(element).fontFamily));
   assert(
     fonts.length > 0 && fonts.every((font) => font.includes("SUIT") && !font.includes("monospace")),
     "Paths, IDs and chart controls must use SUIT",
   );
+  await verifyAxisNavigation(page, artifacts);
   // Exercise actual canvas hit-testing with tapered columns, not just tree navigation.
   const initialCanvas = page.locator(".matrix-host > canvas");
   const initialBox = await initialCanvas.boundingBox();
@@ -172,7 +182,7 @@ try {
   await page.locator(".minimap canvas").click({ position: { x: 110, y: 40 } });
   await chartReady();
   assert(
-    (await page.locator(".chart-controls span").textContent()) === "1.0×",
+    (await page.getByRole("button", { name: "배율 조정", exact: true }).textContent()) === "1.0×",
     "Minimap navigation should preserve zoom",
   );
   await page.getByRole("button", { name: "Reset view", exact: true }).click();
@@ -301,17 +311,13 @@ try {
   await page.getByRole("combobox", { name: "File type filter" }).selectOption("");
   await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("document.ts");
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
-  await page.waitForFunction(
-    () => document.querySelector(".chart-controls span")?.textContent === "1.5×",
-  );
+  await page.waitForFunction(() => document.querySelector(".zoom-trigger")?.textContent === "1.5×");
   await page.locator(".search-result").first().dblclick();
   assert(
     (await page.locator(".chart-breadcrumb").textContent())?.includes("document.ts"),
     "Focus/breadcrumb failed",
   );
-  await page.waitForFunction(
-    () => document.querySelector(".chart-controls span")?.textContent === "1.0×",
-  );
+  await page.waitForFunction(() => document.querySelector(".zoom-trigger")?.textContent === "1.0×");
   await page.getByRole("button", { name: "Go back", exact: true }).click();
   await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("legacy.ts");
   await page.locator(".search-result").first().click();
@@ -367,6 +373,7 @@ try {
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     "Mobile horizontal overflow",
   );
+  await verifyTouchNavigation(page, artifacts);
   await page.setViewportSize({ width: 1440, height: 940 });
   const big = benchmarkReport();
   assert(big.nodes.length === 100000, "Benchmark size must be exactly 100k");

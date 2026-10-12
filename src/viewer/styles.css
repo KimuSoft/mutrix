@@ -505,12 +505,14 @@ button {
   border-radius: 6px;
   box-shadow: 0 2px 7px #00000008;
 }
-.chart-controls span {
+.chart-controls .zoom-trigger {
   font:
     10px "SUIT Variable",
     system-ui,
     sans-serif;
-  min-width: 40px;
+  width: auto;
+  min-width: 44px;
+  padding: 0 6px;
   text-align: center;
   color: var(--muted);
 }
@@ -568,6 +570,38 @@ button {
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 11px;
+}
+.zoom-panel {
+  width: min(280px, calc(100vw - 90px));
+}
+.zoom-axis-options {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  margin: 12px 0;
+  border-radius: 6px;
+  background: var(--panel);
+}
+.zoom-axis-options button {
+  flex: 1;
+  padding: 5px 8px;
+  border-radius: 4px;
+  color: var(--muted);
+}
+.zoom-axis-options button[aria-checked="true"] {
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: 0 1px 3px #00000008;
+}
+.zoom-axis-row {
+  display: grid;
+  grid-template-columns: 1fr 32px 58px 32px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.zoom-axis-row output {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .chart-tooltip {
   position: absolute;

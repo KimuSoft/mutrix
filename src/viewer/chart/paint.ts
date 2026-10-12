@@ -1,6 +1,6 @@
 import { color } from "d3-color";
 import type { DrawItem } from "./lod";
-import type { ZoomTransform } from "d3-zoom";
+import type { ChartCamera } from "./camera";
 import { nodeFill } from "../../shared/colors";
 import { signed } from "../lib/utils";
 import { projectColumn, type ColumnGeometry } from "./columns";
@@ -35,19 +35,19 @@ export interface PaintOptions {
   height: number;
   columns: ColumnGeometry;
   lineScale: number;
-  transform: ZoomTransform;
+  camera: ChartCamera;
   dark: boolean;
   changes: boolean;
   selected?: string;
   hovered?: string;
 }
 export function itemRect(item: DrawItem, options: PaintOptions) {
-  const { transform: t, columns, lineScale: sy } = options;
+  const { camera: t, columns, lineScale: sy } = options;
   return {
-    x: projectColumn(item.y0, columns) * t.k + t.x,
-    y: item.x0 * sy * t.k + t.y,
-    width: (projectColumn(item.y1, columns) - projectColumn(item.y0, columns)) * t.k,
-    height: (item.x1 - item.x0) * sy * t.k,
+    x: projectColumn(item.y0, columns) * t.kx + t.x,
+    y: item.x0 * sy * t.ky + t.y,
+    width: (projectColumn(item.y1, columns) - projectColumn(item.y0, columns)) * t.kx,
+    height: (item.x1 - item.x0) * sy * t.ky,
   };
 }
 
