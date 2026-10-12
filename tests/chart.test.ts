@@ -1,5 +1,4 @@
 import { test, expect } from "bun:test";
-import { zoomIdentity } from "d3-zoom";
 import { demoReport } from "../src/viewer/demo";
 import { buildLayout, reportIndex } from "../src/viewer/chart/layout";
 import { visibleItems } from "../src/viewer/chart/lod";
@@ -79,13 +78,13 @@ test("painting, hit rectangles and horizontal culling agree after zoom and pan",
     height: 600,
     columns: { rootWidth: 48, childScale: 1.5, width: 48 + (layout.width - 48) * 1.5 },
     lineScale: 2,
-    transform: zoomIdentity.translate(37, -13).scale(3),
+    camera: { x: 37, y: -13, kx: 3, ky: 2 },
     dark: false,
     changes: true,
   });
   expect(rect.x).toBe((48 + (file.y0 - 48) * 1.5) * 3 + 37);
   expect(rect.width).toBe((file.y1 - file.y0) * 4.5);
-  expect(rect.y).toBe(file.x0 * 6 - 13);
+  expect(rect.y).toBe(file.x0 * 4 - 13);
 });
 
 test("context column stays thin on wide and leaf-only views; projection and minimap share ratios", () => {

@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { select } from "d3-selection";
-import { zoom, zoomIdentity, type ZoomTransform } from "d3-zoom";
 import { Minus, Plus, Scan, Layers3 } from "lucide-react";
 import type { ReportNode } from "../../shared/types";
 import type { ChartLayout } from "./layout";
@@ -8,14 +6,18 @@ import { visibleItems, type DrawItem } from "./lod";
 import { paint, itemRect, type PaintOptions } from "./paint";
 import { Button } from "../components/ui/button";
 import { format, signed } from "../lib/utils";
-import { fitColumns, miniatureColumns, projectColumn, unprojectColumn } from "./columns";
+import { fitColumns, miniatureColumns, unprojectColumn } from "./columns";
 import { ChartHelp } from "../components/ChartHelp";
-
-export interface ChartCamera {
-  x: number;
-  y: number;
-  k: number;
-}
+import { ZoomControls } from "../components/ZoomControls";
+import {
+  constrainCamera,
+  fitBand,
+  identityCamera,
+  visibleWorld,
+  type ChartCamera,
+  type ZoomAxis,
+} from "./camera";
+import { bindNavigation } from "./navigation";
 
 interface Props {
   layout?: ChartLayout;
@@ -40,14 +42,15 @@ export function MatrixChart({
   const canvas = useRef<HTMLCanvasElement>(null);
   const mini = useRef<HTMLCanvasElement>(null);
   const host = useRef<HTMLDivElement>(null);
-  const actions = useRef({ selected, onSelect, onFocus, onCameraChange });
-  actions.current = { selected, onSelect, onFocus, onCameraChange };
+  const [axis, setAxis] = useState<ZoomAxis>("both");
+  const actions = useRef({ selected, onSelect, onFocus, onCameraChange, axis });
+  actions.current = { selected, onSelect, onFocus, onCameraChange, axis };
   const previousSetup = useRef<{ layout: ChartLayout; initialCamera: ChartCamera } | undefined>(
     undefined,
   );
   const lastCamera = useRef(initialCamera);
   const api = useRef<{
-    scale: (factor: number) => void;
+    scale: (factor: number, axis?: ZoomAxis) => void;
     reset: () => void;
     move: (event: React.MouseEvent) => void;
   } | null>(null);
@@ -57,7 +60,7 @@ export function MatrixChart({
     x: number;
     y: number;
   }>();
-  const [scale, setScale] = useState(1);
+  const [displayCamera, setDisplayCamera] = useState(initialCamera);
   useEffect(() => {
     if (!canvas.current || !host.current || !layout) return;
     const element = canvas.current,
@@ -72,11 +75,10 @@ export function MatrixChart({
         ? initialCamera
         : previousSetup.current.layout === layout
           ? lastCamera.current
-          : { x: 0, y: 0, k: 1 };
+          : identityCamera();
     previousSetup.current = { layout, initialCamera };
-    let transform: ZoomTransform = zoomIdentity
-      .translate(startingCamera.x, startingCamera.y)
-      .scale(startingCamera.k);
+    let camera = startingCamera;
+    const bounds = () => ({ width, height, worldWidth: Math.max(width, columns.width) });
     let items: DrawItem[] = [],
       options: PaintOptions;
     let frame = 0,
@@ -90,31 +92,38 @@ export function MatrixChart({
         height,
         columns,
         lineScale: sy,
-        transform,
+        camera,
         dark,
         changes,
         selected: actions.current.selected,
         hovered: hovering,
       };
+      const world = visibleWorld(camera, width, height);
       items = visibleItems(layout.root, {
-        left: unprojectColumn(-transform.x / transform.k, columns),
-        right: unprojectColumn((width - transform.x) / transform.k, columns),
-        top: -transform.y / (sy * transform.k),
-        bottom: (height - transform.y) / (sy * transform.k),
-        pixelsPerLine: sy * transform.k,
+        left: unprojectColumn(world.left, columns),
+        right: unprojectColumn(world.right, columns),
+        top: world.top / sy,
+        bottom: world.bottom / sy,
+        pixelsPerLine: sy * camera.ky,
       });
       paint(ctx, items, options);
       paintMini();
-      setScale(transform.k);
+      setDisplayCamera(camera);
       const metrics = (
         window as unknown as {
-          __mutrixMetrics: { firstPaint?: number; frames: number[]; drawn: number };
+          __mutrixMetrics: {
+            firstPaint?: number;
+            frames: number[];
+            drawn: number;
+            camera: ChartCamera;
+          };
         }
       ).__mutrixMetrics;
       metrics.firstPaint ??= performance.now();
       metrics.frames.push(performance.now() - started);
       if (metrics.frames.length > 600) metrics.frames.shift();
       metrics.drawn = items.length;
+      metrics.camera = camera;
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(render);
@@ -147,32 +156,36 @@ export function MatrixChart({
         height: mh,
         columns: miniatureColumns(columns, mw),
         lineScale: mh / (layout.total || 1),
-        transform: zoomIdentity,
+        camera: identityCamera(),
         dark,
         changes,
       });
-      const x = (-transform.x / transform.k / columns.width) * mw;
-      const y = (-transform.y / (sy * transform.k) / (layout.total || 1)) * mh;
+      const view = visibleWorld(camera, width, height);
+      const x = Math.max(0, view.left / columns.width) * mw;
+      const y = Math.max(0, view.top / height) * mh;
       context.strokeStyle = dark ? "#f5f5f5" : "#262626";
       context.lineWidth = 1.5;
       context.strokeRect(
-        Math.max(0, x),
-        Math.max(0, y),
-        Math.min(mw, (width / transform.k / columns.width) * mw),
-        Math.min(mh, (height / (sy * transform.k) / (layout.total || 1)) * mh),
+        x,
+        y,
+        Math.max(0, Math.min(mw, (view.right / columns.width) * mw) - x),
+        Math.max(0, Math.min(mh, (view.bottom / height) * mh) - y),
       );
     };
-    const behavior = zoom<HTMLCanvasElement, unknown>()
-      .scaleExtent([0.3, 20000])
-      .filter((event) => !event.button && (event.type !== "wheel" || !event.shiftKey))
-      .on("zoom", (event) => {
-        transform = event.transform;
-        lastCamera.current = { x: transform.x, y: transform.y, k: transform.k };
-        actions.current.onCameraChange(lastCamera.current);
-        schedule();
-        setTooltip(undefined);
-      });
-    const selection = select(element).call(behavior);
+    const update = (next: ChartCamera) => {
+      camera = constrainCamera(next, bounds());
+      lastCamera.current = camera;
+      actions.current.onCameraChange(camera);
+      hovering = undefined;
+      setTooltip(undefined);
+      schedule();
+    };
+    const navigation = bindNavigation(element, {
+      camera: () => camera,
+      bounds,
+      axis: () => actions.current.axis,
+      update,
+    });
     const resize = () => {
       const rect = container.getBoundingClientRect();
       width = rect.width;
@@ -183,35 +196,11 @@ export function MatrixChart({
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       sy = height / (layout.total || 1);
       columns = fitColumns(layout.width, width);
-      behavior
-        .extent([
-          [0, 0],
-          [width, height],
-        ])
-        .translateExtent([
-          [0, 0],
-          [Math.max(width, columns.width), height],
-        ]);
-      schedule();
+      update(camera);
     };
     const observer = new ResizeObserver(resize);
     observer.observe(container);
     resize();
-    // Restore the navigation snapshot after the viewport geometry is known.
-    selection.call(
-      behavior.transform,
-      behavior.constrain()(
-        transform,
-        [
-          [0, 0],
-          [width, height],
-        ],
-        [
-          [0, 0],
-          [Math.max(width, columns.width), height],
-        ],
-      ),
-    );
     const hit = (event: MouseEvent) => {
       const rect = element.getBoundingClientRect(),
         x = event.clientX - rect.left,
@@ -222,6 +211,7 @@ export function MatrixChart({
       });
     };
     const move = (event: MouseEvent) => {
+      if (navigation.dragging()) return;
       const item = hit(event);
       const node = item?.nodes[0].data.node;
       if (hovering !== node?.id) {
@@ -250,13 +240,7 @@ export function MatrixChart({
       event.preventDefault();
       const item = hit(event);
       if (item?.aggregate) {
-        const targetScale = Math.min(20000, height / Math.max(1, (item.x1 - item.x0) * sy));
-        selection.call(
-          behavior.transform,
-          zoomIdentity
-            .translate(-projectColumn(item.y0, columns) * targetScale, -item.x0 * sy * targetScale)
-            .scale(targetScale),
-        );
+        update(fitBand(camera, item.x0 * sy, (item.x1 - item.x0) * sy, bounds()));
       } else if (item) actions.current.onFocus(item.nodes[0].data.node.id);
     };
     const leave = () => {
@@ -264,51 +248,35 @@ export function MatrixChart({
       hovering = undefined;
       schedule();
     };
-    const wheel = (event: WheelEvent) => {
-      if (event.shiftKey) {
-        event.preventDefault();
-        selection.call(behavior.translateBy, -event.deltaY / transform.k, 0);
-      }
-    };
-    selection.on("dblclick.zoom", null);
     element.addEventListener("mousemove", move);
     element.addEventListener("click", click);
     element.addEventListener("dblclick", doubleClick);
     element.addEventListener("mouseleave", leave);
-    element.addEventListener("wheel", wheel, { passive: false });
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "+" || event.key === "=") selection.call(behavior.scaleBy, 1.5);
-      else if (event.key === "-") selection.call(behavior.scaleBy, 1 / 1.5);
-      else if (event.key === "Home") selection.call(behavior.transform, zoomIdentity);
-    };
-    element.addEventListener("keydown", onKey);
     api.current = {
-      scale: (factor) => selection.call(behavior.scaleBy, factor),
-      reset: () => selection.call(behavior.transform, zoomIdentity),
+      scale: navigation.scale,
+      reset: navigation.reset,
       move: (event) => {
         const rect = mini.current!.getBoundingClientRect();
         const x =
           Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * columns.width;
         const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)) * height;
-        selection.call(behavior.translateTo, x, y);
+        navigation.moveTo({ x, y });
       },
     };
     return () => {
       active = false;
       observer.disconnect();
       cancelAnimationFrame(frame);
-      selection.on(".zoom", null);
+      navigation.destroy();
       element.removeEventListener("mousemove", move);
       element.removeEventListener("click", click);
       element.removeEventListener("dblclick", doubleClick);
       element.removeEventListener("mouseleave", leave);
-      element.removeEventListener("wheel", wheel);
-      element.removeEventListener("keydown", onKey);
       api.current = null;
     };
   }, [layout, dark, changes, initialCamera]);
   useEffect(() => {
-    // Redraw selection through the existing zoom behavior without rebuilding the layout.
+    // Redraw selection without rebuilding the layout or resetting the camera.
     if (canvas.current) canvas.current.dispatchEvent(new MouseEvent("mouseleave"));
   }, [selected]);
   return (
@@ -363,7 +331,12 @@ export function MatrixChart({
           >
             <Minus />
           </Button>
-          <span>{scale.toFixed(1)}×</span>
+          <ZoomControls
+            camera={displayCamera}
+            axis={axis}
+            onAxis={setAxis}
+            onZoom={(factor, axis) => api.current?.scale(factor, axis)}
+          />
           <Button
             variant="ghost"
             size="icon"
