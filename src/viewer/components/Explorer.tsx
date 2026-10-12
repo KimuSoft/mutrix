@@ -222,10 +222,6 @@ export function Explorer({
           <p className="result-count">일치하는 파일·심볼이 없습니다.</p>
         )}
       </div>
-      <div className="explorer-foot">
-        <span>SNAPSHOT</span>
-        <span>읽기 전용</span>
-      </div>
     </aside>
   );
 }

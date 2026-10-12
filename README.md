@@ -109,7 +109,7 @@ v1은 리팩토링 점수나 자동 판정을 제공하지 않습니다. 다중 
 
 ## 개발과 검증
 
-UI와 차트 라벨은 [SUIT](https://github.com/sun-typeface/SUIT) 가변 글꼴을 사용합니다. 글꼴은 HTML에 내장되어 오프라인으로 동작합니다. 코드·경로는 고정폭 글꼴을 유지합니다. SUIT의 저작권 고지와 OFL 1.1 전문은 보고서의 diagnostics → Font license에서 확인할 수 있습니다.
+UI·경로·노드 ID·차트 라벨은 모두 [SUIT](https://github.com/sun-typeface/SUIT) 가변 글꼴을 사용합니다. 글꼴은 HTML에 내장되어 오프라인으로 동작합니다. SUIT의 저작권 고지와 OFL 1.1 전문은 보고서의 diagnostics → Font license에서 확인할 수 있습니다. 표시 범위는 breadcrumb 옆 배지로, 현재 LOC는 차트 첫 열의 이름 옆에 표시합니다. 차트 조작 안내는 확대·축소 버튼 옆의 `?` 버튼에서 열 수 있습니다.
 
 파일 아이콘은 [Simple Icons](https://github.com/simple-icons/simple-icons)의 필요한 SVG만 번들에 포함합니다. TSX·JSX는 React, TS·MTS·CTS는 TypeScript, JS 계열은 JavaScript이며 JSON·CSS·HTML·Markdown·Python·Go·YAML·TOML·Dockerfile·Svelte도 구분합니다. 트리·검색·상세 패널과 Canvas에서 같은 로고를 사용하고 차트의 변경 색상과 혼동되지 않도록 단색으로 표시합니다. 모든 아이콘은 HTML에 내장되며 Simple Icons 패키지는 CC0-1.0입니다.
 

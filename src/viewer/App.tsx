@@ -21,7 +21,6 @@ import { Explorer } from "./components/Explorer";
 import { Inspector } from "./components/Inspector";
 import { DiagnosticsDialog } from "./components/DiagnosticsDialog";
 import { Button } from "./components/ui/button";
-import { format } from "./lib/utils";
 
 interface ViewSnapshot {
   focus: string;
@@ -261,21 +260,15 @@ export function App({ initialReport }: { initialReport: Report }) {
                 </span>
               ))}
             </nav>
+            <span className="scope-badge" title="현재 표시 범위">
+              {filters.changed || filters.extension || focus !== report.rootId
+                ? "부분 보기"
+                : "전체"}
+              {filters.changed && " · 변경만"} {filters.extension && ` · ${filters.extension}`}
+            </span>
             <Button variant="ghost" size="sm" onClick={() => focusNode(report.rootId)}>
               전체 보기
             </Button>
-          </div>
-          <div className="visible-scope">
-            <span>
-              {filters.changed || filters.extension || focus !== report.rootId
-                ? "FILTERED VIEW"
-                : "PROJECT OVERVIEW"}{" "}
-              {filters.changed && "· 변경만"} {filters.extension && `· ${filters.extension}`}
-            </span>
-            <span>
-              {format(layout?.root.data.afterLoc ?? 0)} current LOC
-              {changes && ` · ${format(layout?.root.data.beforeLoc ?? 0)} baseline`}
-            </span>
           </div>
           <MatrixChart
             layout={layout}
@@ -289,10 +282,6 @@ export function App({ initialReport }: { initialReport: Report }) {
               currentCamera.current = camera;
             }}
           />
-          <div className="chart-help">
-            <span>드래그 이동 · 스크롤 확대 · Shift+스크롤 가로 이동</span>
-            <span>클릭 상세 · 더블클릭 영역 확대</span>
-          </div>
         </section>
         {right && (
           <Inspector

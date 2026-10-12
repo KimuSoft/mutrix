@@ -119,7 +119,7 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
         ctx.rotate(-Math.PI / 2);
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(text, 0, 0);
+        ctx.fillText(`${text} · ${item.nodes[0].data.afterLoc.toLocaleString()} LOC`, 0, 0);
       }
       ctx.restore();
       continue;
@@ -142,7 +142,7 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
     }
     if (h >= 38) {
       ctx.globalAlpha = (changes && unchanged ? 0.38 : 0.8) * textOpacity;
-      ctx.font = "11px ui-monospace, monospace";
+      ctx.font = '11px "SUIT Variable", system-ui, sans-serif';
       ctx.fillText(
         changes ? `${signed(node.delta)} lines` : `${node.afterLoc.toLocaleString()} lines`,
         x + 10,

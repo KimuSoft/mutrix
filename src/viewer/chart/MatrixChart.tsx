@@ -9,6 +9,7 @@ import { paint, itemRect, type PaintOptions } from "./paint";
 import { Button } from "../components/ui/button";
 import { format, signed } from "../lib/utils";
 import { fitColumns, miniatureColumns, projectColumn, unprojectColumn } from "./columns";
+import { ChartHelp } from "../components/ChartHelp";
 
 export interface ChartCamera {
   x: number;
@@ -56,7 +57,7 @@ export function MatrixChart({
     x: number;
     y: number;
   }>();
-  const [stats, setStats] = useState({ drawn: 0, scale: 1 });
+  const [scale, setScale] = useState(1);
   useEffect(() => {
     if (!canvas.current || !host.current || !layout) return;
     const element = canvas.current,
@@ -104,7 +105,7 @@ export function MatrixChart({
       });
       paint(ctx, items, options);
       paintMini();
-      setStats({ drawn: items.length, scale: transform.k });
+      setScale(transform.k);
       const metrics = (
         window as unknown as {
           __mutrixMetrics: { firstPaint?: number; frames: number[]; drawn: number };
@@ -313,8 +314,8 @@ export function MatrixChart({
   return (
     <div className="matrix-region">
       <div className="axis-label">
-        {changes ? "비교 표시 LOC" : "CURRENT LOC"}
-        <span>↑ {format(layout?.total ?? 0)}</span>
+        {changes ? "비교 표시 LOC" : "LOC"}
+        <span>↑{changes && ` ${format(layout?.total ?? 0)}`}</span>
       </div>
       <div className="matrix-host" ref={host}>
         {layout && layout.total > 0 ? (
@@ -362,7 +363,7 @@ export function MatrixChart({
           >
             <Minus />
           </Button>
-          <span>{stats.scale.toFixed(1)}×</span>
+          <span>{scale.toFixed(1)}×</span>
           <Button
             variant="ghost"
             size="icon"
@@ -382,6 +383,7 @@ export function MatrixChart({
           >
             <Scan />
           </Button>
+          <ChartHelp />
         </div>
         {layout && layout.total > 0 && (
           <button
@@ -390,15 +392,8 @@ export function MatrixChart({
             onClick={(event) => api.current?.move(event)}
           >
             <canvas width={126} height={78} ref={mini} />
-            <span>OVERVIEW</span>
           </button>
         )}
-      </div>
-      <div className="matrix-caption">
-        <span>
-          계층 깊이 → <b>PROJECT / FOLDER / FILE / SCOPE</b>
-        </span>
-        <span>{format(stats.drawn)} drawn · LOD auto</span>
       </div>
     </div>
   );

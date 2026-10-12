@@ -94,6 +94,30 @@ try {
     await page.getByRole("button", { name: "Summary 불러오기", exact: true }).isVisible(),
     "Offline viewer did not load",
   );
+  const help = page.getByRole("button", { name: "차트 사용법", exact: true });
+  const guide = page.getByRole("dialog", { name: "차트 사용법 안내", exact: true });
+  await help.click();
+  assert(await guide.isVisible(), "Chart help popup did not open");
+  await page.screenshot({ path: `${artifacts}/mutrix-help.png`, fullPage: true });
+  await page.keyboard.press("Escape");
+  assert(
+    await help.evaluate((button) => document.activeElement === button),
+    "Escape must restore help trigger focus",
+  );
+  assert((await guide.count()) === 0, "Escape did not close chart help");
+  await help.click();
+  await help.click();
+  assert((await guide.count()) === 0, "Help toggle did not close chart help");
+  await help.click();
+  await page.locator(".project-label").click();
+  assert((await guide.count()) === 0, "Outside click did not close chart help");
+  const fonts = await page
+    .locator("code, .inspector-title p, .branch-label, .chart-controls > span")
+    .evaluateAll((elements) => elements.map((element) => getComputedStyle(element).fontFamily));
+  assert(
+    fonts.length > 0 && fonts.every((font) => font.includes("SUIT") && !font.includes("monospace")),
+    "Paths, IDs and chart controls must use SUIT",
+  );
   // Exercise actual canvas hit-testing with tapered columns, not just tree navigation.
   const initialCanvas = page.locator(".matrix-host > canvas");
   const initialBox = await initialCanvas.boundingBox();
@@ -264,7 +288,7 @@ try {
   await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("");
   await page.getByRole("combobox", { name: "File type filter" }).selectOption(".tsx");
   assert(
-    (await page.locator(".visible-scope").textContent())?.includes(".tsx"),
+    (await page.locator(".scope-badge").textContent())?.includes(".tsx"),
     "Filter scope missing",
   );
   await page.getByRole("checkbox", { name: "변경된 영역만" }).check();
@@ -328,6 +352,17 @@ try {
   );
   await chartReady();
   await page.screenshot({ path: `${artifacts}/mutrix-mobile.png`, fullPage: true });
+  await help.click();
+  const mobileGuide = await guide.boundingBox();
+  assert(
+    mobileGuide &&
+      mobileGuide.x >= 0 &&
+      mobileGuide.x + mobileGuide.width <= 390 &&
+      mobileGuide.y >= 0,
+    "Mobile help popup must fit within the viewport",
+  );
+  await page.screenshot({ path: `${artifacts}/mutrix-mobile-help.png`, fullPage: true });
+  await page.keyboard.press("Escape");
   assert(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     "Mobile horizontal overflow",
