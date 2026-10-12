@@ -117,9 +117,18 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
       if (w >= 20 && h >= 60) {
         ctx.translate(x + w / 2, y + h / 2);
         ctx.rotate(-Math.PI / 2);
-        ctx.textAlign = "center";
+        const loc = `${item.nodes[0].data.afterLoc.toLocaleString()} LOC`;
+        const nameWidth = ctx.measureText(text).width;
+        ctx.font = '10px "SUIT Variable", system-ui, sans-serif';
+        const locWidth = ctx.measureText(loc).width;
+        const start = -(nameWidth + 8 + locWidth) / 2;
+        ctx.textAlign = "left";
         ctx.textBaseline = "middle";
-        ctx.fillText(`${text} · ${item.nodes[0].data.afterLoc.toLocaleString()} LOC`, 0, 0);
+        ctx.font = '500 12px "SUIT Variable", system-ui, sans-serif';
+        ctx.fillText(text, start, 0);
+        ctx.font = '10px "SUIT Variable", system-ui, sans-serif';
+        ctx.fillStyle = foreground === "#fafafa" ? "#d4d4d4" : dark ? "#a3a3a3" : "#737373";
+        ctx.fillText(loc, start + nameWidth + 8, 0);
       }
       ctx.restore();
       continue;
