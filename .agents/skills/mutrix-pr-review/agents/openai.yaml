@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mutrix PR Review"
+  short_description: "PR 변경 구조를 분석하고 노드별 설명이 담긴 오프라인 보고서 생성"
+  default_prompt: "$mutrix-pr-review로 이 PR의 변경 범위를 확인하고, 실제 diff에 근거한 Summary를 붙인 Mutrix HTML 보고서를 만들어줘."

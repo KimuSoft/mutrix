@@ -1,0 +1,5 @@
+node_modules
+dist
+artifacts
+bun.lock
+index.html

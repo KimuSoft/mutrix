@@ -1,0 +1,400 @@
+import { chromium } from "@playwright/test";
+import { mkdir, copyFile, readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { cpus, platform, release, totalmem } from "node:os";
+import { demoReport } from "../src/viewer/demo";
+import { renderHtml } from "../src/report/html";
+import { benchmarkReport } from "./benchmark";
+import { fileIcon } from "../src/viewer/lib/file-icons";
+import { buildLayout } from "../src/viewer/chart/layout";
+import { fitColumns, projectColumn } from "../src/viewer/chart/columns";
+import { nodeFill } from "../src/shared/colors";
+
+function assert(value: unknown, message: string): asserts value {
+  if (!value) throw new Error(message);
+}
+const template = await readFile("dist/viewer/index.html", "utf8");
+const artifacts = resolve("artifacts");
+await mkdir(`${artifacts}/moved`, { recursive: true });
+await writeFile(`${artifacts}/mutrix-demo.html`, renderHtml(template, demoReport()));
+await copyFile(`${artifacts}/mutrix-demo.html`, `${artifacts}/moved/report.html`);
+const executablePath =
+  process.env.MUTRIX_BROWSER ??
+  (platform() === "win32"
+    ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+    : undefined);
+const browser = await chromium.launch({ executablePath, headless: true });
+const context = await browser.newContext({
+  viewport: { width: 1440, height: 940 },
+  colorScheme: "light",
+});
+const errors: string[] = [];
+const externalRequests: string[] = [];
+await context.route(/^https?:/, (route) => {
+  externalRequests.push(route.request().url());
+  return route.abort();
+});
+const page = await context.newPage();
+page.on("pageerror", (error) => errors.push(String(error)));
+async function painted() {
+  await page.waitForFunction(
+    () =>
+      !!(window as unknown as { __mutrixMetrics: { firstPaint?: number } }).__mutrixMetrics
+        ?.firstPaint,
+  );
+}
+async function chartReady() {
+  await page.waitForFunction(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>(".matrix-host > canvas");
+    return canvas && canvas.getContext("2d")!.getImageData(15, 15, 1, 1).data[3] > 0;
+  });
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+}
+async function camera() {
+  return page.locator(".matrix-host > canvas").evaluate((element) => {
+    const value = (element as HTMLCanvasElement & { __zoom: { k: number; x: number; y: number } })
+      .__zoom;
+    return { k: value.k, x: value.x, y: value.y };
+  });
+}
+async function assertCamera(expected: { k: number; x: number; y: number }) {
+  const restored = await camera();
+  assert(
+    Math.abs(restored.k - expected.k) < 0.001 &&
+      Math.abs(restored.x - expected.x) < 0.5 &&
+      Math.abs(restored.y - expected.y) < 0.5,
+    `Previous camera was not restored: ${JSON.stringify({ expected, restored })}`,
+  );
+}
+async function zoomAndPan() {
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  const box = await page.locator(".matrix-host > canvas").boundingBox();
+  assert(box, "Canvas missing before pan");
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.4);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.5 - 35, box.y + box.height * 0.4 - 25, { steps: 5 });
+  await page.mouse.up();
+  return camera();
+}
+try {
+  await page.goto(pathToFileURL(`${artifacts}/moved/report.html`).href);
+  await painted();
+  const suitLoaded = await page.evaluate(async () => {
+    const fonts = await document.fonts.load('500 12px "SUIT Variable"', "프로젝트 Mutrix");
+    return fonts.length > 0 && fonts.every((font) => font.status === "loaded");
+  });
+  assert(suitLoaded, "Embedded SUIT must load offline from the moved report");
+  assert(
+    await page.getByRole("button", { name: "Summary 불러오기", exact: true }).isVisible(),
+    "Offline viewer did not load",
+  );
+  // Exercise actual canvas hit-testing with tapered columns, not just tree navigation.
+  const initialCanvas = page.locator(".matrix-host > canvas");
+  const initialBox = await initialCanvas.boundingBox();
+  assert(initialBox, "Initial canvas missing");
+  await chartReady();
+  await initialCanvas.dblclick({
+    position: {
+      x: 48 + 100 * Math.max(1, (initialBox.width - 48) / 800),
+      y: initialBox.height * 0.3,
+    },
+  });
+  assert(
+    (await page.locator(".chart-breadcrumb nav button").last().textContent()) === "src",
+    "Tapered canvas double-click should focus the src folder",
+  );
+  await chartReady();
+  await page.screenshot({ path: `${artifacts}/mutrix-focused.png`, fullPage: true });
+  await initialCanvas.dblclick({ position: { x: 24, y: initialBox.height * 0.3 } });
+  assert(
+    (await page.locator(".chart-breadcrumb nav button").count()) === 1,
+    "Double-clicking the focused context should return to the project",
+  );
+  await chartReady();
+  const projectCamera = await zoomAndPan();
+  await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("folder:src");
+  await page.locator(".search-result").first().dblclick();
+  await chartReady();
+  const folderCamera = await zoomAndPan();
+  await page
+    .getByRole("textbox", { name: "Search paths and symbols" })
+    .fill("file:src/editor/document.ts");
+  await page.locator(".search-result").first().dblclick();
+  await chartReady();
+  await initialCanvas.dblclick({ position: { x: 24, y: initialBox.height * 0.3 } });
+  assert(
+    (await page.locator(".chart-breadcrumb nav button").last().textContent()) === "src",
+    "Nested toggle should return one level",
+  );
+  await chartReady();
+  await assertCamera(folderCamera);
+  await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("folder:src");
+  await page.locator(".search-result").first().dblclick();
+  await chartReady();
+  await assertCamera(projectCamera);
+  assert(
+    await page.getByRole("button", { name: "Go back", exact: true }).isDisabled(),
+    "Toggling back must consume history",
+  );
+  await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("");
+  await page.getByRole("button", { name: "Reset view", exact: true }).click();
+  await chartReady();
+  await page.locator(".minimap canvas").click({ position: { x: 110, y: 40 } });
+  await chartReady();
+  assert(
+    (await page.locator(".chart-controls span").textContent()) === "1.0×",
+    "Minimap navigation should preserve zoom",
+  );
+  await page.getByRole("button", { name: "Reset view", exact: true }).click();
+  await chartReady();
+  await page.screenshot({ path: `${artifacts}/mutrix-overview.png`, fullPage: true });
+  // SVG silhouettes must match in tree/search, Inspector, and the offline Canvas.
+  for (const path of ["src/ui/Editor.tsx", "src/editor/commands.ts"]) {
+    const expected = fileIcon(path)!;
+    await page.getByRole("textbox", { name: "Search paths and symbols" }).fill(`file:${path}`);
+    const result = page.locator(".search-result").first();
+    assert(
+      (await result.locator("svg[data-file-icon] path").getAttribute("d")) === expected.path,
+      `Wrong search logo for ${path}`,
+    );
+    await result.click();
+    await chartReady();
+    assert(
+      (await page.locator(".node-symbol svg").getAttribute("data-file-icon")) === expected.slug,
+      `Wrong Inspector logo for ${path}`,
+    );
+    const report = demoReport();
+    const layout = buildLayout(new Map(report.nodes.map((n) => [n.id, n])), report.rootId, {
+      changed: false,
+      extension: "",
+      sort: "path",
+    })!;
+    const node = layout.nodes.find((n) => n.data.node.id === `file:${path}`)!;
+    const box = await initialCanvas.boundingBox();
+    assert(box, "Canvas missing during logo check");
+    const columns = fitColumns(layout.width, box.width);
+    const top = (node.x0 * box.height) / layout.total + 0.6;
+    const nodeHeight = ((node.x1 - node.x0) * box.height) / layout.total - 1.2;
+    const baseline = top + (nodeHeight >= 38 ? 20 : nodeHeight / 2 + 4);
+    const difference = await initialCanvas.evaluate(
+      (element, icon) => {
+        const source = element as HTMLCanvasElement;
+        const ratio = window.devicePixelRatio || 1;
+        const reference = document.createElement("canvas");
+        reference.width = Math.ceil(15 * ratio);
+        reference.height = Math.ceil(15 * ratio);
+        const ctx = reference.getContext("2d")!;
+        ctx.fillStyle = icon.background;
+        ctx.fillRect(0, 0, reference.width, reference.height);
+        const blank = ctx.getImageData(0, 0, reference.width, reference.height).data;
+        ctx.translate(
+          icon.x * ratio - Math.floor(icon.x * ratio),
+          icon.y * ratio - Math.floor(icon.y * ratio),
+        );
+        ctx.scale((ratio * 14) / 24, (ratio * 14) / 24);
+        ctx.fillStyle = "#171717";
+        ctx.fill(new Path2D(icon.path));
+        const expected = ctx.getImageData(0, 0, reference.width, reference.height).data;
+        const actual = source
+          .getContext("2d")!
+          .getImageData(
+            Math.floor(icon.x * ratio),
+            Math.floor(icon.y * ratio),
+            reference.width,
+            reference.height,
+          ).data;
+        let error = 0,
+          blankError = 0;
+        for (let i = 0; i < expected.length; i += 4) {
+          for (let c = 0; c < 3; c++) {
+            error += Math.abs(expected[i + c] - actual[i + c]);
+            blankError += Math.abs(blank[i + c] - actual[i + c]);
+          }
+        }
+        return {
+          error: error / (reference.width * reference.height * 3),
+          blankError: blankError / (reference.width * reference.height * 3),
+        };
+      },
+      {
+        path: expected.path,
+        background: nodeFill(node.data.node, true, false),
+        x: projectColumn(node.y0, columns) + 12,
+        y: baseline - 12,
+      },
+    );
+    assert(
+      difference.error < difference.blankError * 0.5,
+      `Canvas did not paint the ${expected.slug} logo (${JSON.stringify(difference)})`,
+    );
+  }
+  await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("undo");
+  await page.locator(".search-result").first().click();
+  assert((await page.locator(".inspector h2").textContent()) === "undo", "Search selection failed");
+  assert(
+    (await page.locator(".summary-text").textContent())?.includes("Undo"),
+    "Existing Summary missing",
+  );
+  const injection = "</script><img src=x onerror=alert(1)> · 테스트 & 설명";
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "summaries.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify({
+        schemaVersion: 1,
+        entries: [
+          { nodeId: "scope:src/editor/history.ts#function:undo~1", summary: injection },
+          { nodeId: "scope:src/editor/history.ts#function:undo~1", summary: "duplicate" },
+          { nodeId: "unknown", summary: "missing" },
+        ],
+      }),
+    ),
+  });
+  await page.waitForFunction(
+    (text) => document.querySelector(".summary-text")?.textContent === text,
+    injection,
+  );
+  assert((await page.locator("img").count()) === 0, "Summary markup executed");
+  await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("");
+  await page.getByRole("combobox", { name: "File type filter" }).selectOption(".tsx");
+  assert(
+    (await page.locator(".visible-scope").textContent())?.includes(".tsx"),
+    "Filter scope missing",
+  );
+  await page.getByRole("checkbox", { name: "변경된 영역만" }).check();
+  await page.getByRole("button", { name: "Structure", exact: true }).click();
+  assert(
+    !(await page.getByRole("checkbox", { name: "변경된 영역만" }).isChecked()),
+    "Structure should clear changes filter",
+  );
+  await page.getByRole("button", { name: "Changes", exact: true }).click();
+  await page.getByRole("combobox", { name: "File type filter" }).selectOption("");
+  await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("document.ts");
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await page.waitForFunction(
+    () => document.querySelector(".chart-controls span")?.textContent === "1.5×",
+  );
+  await page.locator(".search-result").first().dblclick();
+  assert(
+    (await page.locator(".chart-breadcrumb").textContent())?.includes("document.ts"),
+    "Focus/breadcrumb failed",
+  );
+  await page.waitForFunction(
+    () => document.querySelector(".chart-controls span")?.textContent === "1.0×",
+  );
+  await page.getByRole("button", { name: "Go back", exact: true }).click();
+  await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("legacy.ts");
+  await page.locator(".search-result").first().click();
+  assert(
+    await page.getByRole("button", { name: "Open in VS Code", exact: true }).isDisabled(),
+    "Deleted file editor action should be disabled",
+  );
+  await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("document.ts");
+  await page.locator(".search-result").first().click();
+  await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("");
+  await page.getByRole("button", { name: "Dismiss notice", exact: true }).click();
+  await chartReady();
+  await page.screenshot({ path: `${artifacts}/mutrix-inspector.png`, fullPage: true });
+  await page.getByRole("button", { name: "Toggle theme", exact: true }).click();
+  assert((await page.locator("html").getAttribute("class")) === "dark", "Theme toggle failed");
+  await chartReady();
+  await page.waitForTimeout(180); // Allow the UI's color transitions to finish for visual QA.
+  await page.screenshot({ path: `${artifacts}/mutrix-dark.png`, fullPage: true });
+  await page.getByRole("button", { name: "3 diagnostics", exact: true }).click();
+  await page.getByRole("dialog", { name: "Analysis diagnostics", exact: true }).waitFor();
+  assert(
+    (await page.locator(".diagnostics-dialog").textContent())?.includes("Duplicate Summary ID"),
+    "Summary diagnostics missing",
+  );
+  await page.keyboard.press("Escape");
+  assert(
+    !(await page.getByRole("dialog", { name: "Analysis diagnostics", exact: true }).isVisible()),
+    "Diagnostic dialog should close with Escape",
+  );
+  await page.getByRole("button", { name: "Toggle theme", exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await painted();
+  assert(
+    (await page.locator(".explorer").count()) === 0 &&
+      (await page.locator(".inspector").count()) === 0,
+    "Mobile should open directly on the chart",
+  );
+  await chartReady();
+  await page.screenshot({ path: `${artifacts}/mutrix-mobile.png`, fullPage: true });
+  assert(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    "Mobile horizontal overflow",
+  );
+  await page.setViewportSize({ width: 1440, height: 940 });
+  const big = benchmarkReport();
+  assert(big.nodes.length === 100000, "Benchmark size must be exactly 100k");
+  await writeFile(`${artifacts}/benchmark-100k.html`, renderHtml(template, big));
+  await page.goto(pathToFileURL(`${artifacts}/benchmark-100k.html`).href);
+  await painted();
+  const firstPaint = await page.evaluate(
+    () =>
+      (window as unknown as { __mutrixMetrics: { firstPaint: number } }).__mutrixMetrics.firstPaint,
+  );
+  const box = await page.locator(".matrix-host > canvas").boundingBox();
+  assert(box, "Canvas missing");
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+  // Record zoom and drag frames, excluding initial layout paint.
+  await page.evaluate(() => {
+    (window as unknown as { __mutrixMetrics: { frames: number[] } }).__mutrixMetrics.frames = [];
+  });
+  for (let i = 0; i < 20; i++) {
+    await page.mouse.wheel(0, -70);
+    await page.waitForTimeout(25);
+  }
+  await page.mouse.down();
+  for (let i = 0; i < 15; i++) {
+    await page.mouse.move(box.x + box.width * 0.5 + i * 5, box.y + box.height * 0.5 + i * 4);
+    await page.waitForTimeout(20);
+  }
+  await page.mouse.up();
+  const metrics = await page.evaluate(
+    () =>
+      (window as unknown as { __mutrixMetrics: { frames: number[]; drawn: number } })
+        .__mutrixMetrics,
+  );
+  const durations = [...metrics.frames].sort((a, b) => a - b);
+  const p95 = durations[Math.ceil(durations.length * 0.95) - 1] ?? Infinity;
+  const result = {
+    measuredAt: new Date().toISOString(),
+    environment: {
+      platform: platform(),
+      release: release(),
+      cpu: cpus()[0].model,
+      cores: cpus().length,
+      memoryGiB: Math.round(totalmem() / 1024 ** 3),
+      browser: browser.version(),
+      viewport: "1440x940",
+      headless: true,
+    },
+    nodes: big.nodes.length,
+    firstPaintMs: Math.round(firstPaint),
+    frameP95Ms: +p95.toFixed(2),
+    measuredFrames: durations.length,
+    drawnItems: metrics.drawn,
+    offlineExternalRequests: externalRequests,
+    pageErrors: errors,
+  };
+  await writeFile(`${artifacts}/verification.json`, JSON.stringify(result, null, 2));
+  console.log(JSON.stringify(result, null, 2));
+  assert(firstPaint <= 5000, `Initial paint exceeded 5s: ${firstPaint}`);
+  assert(p95 <= 50, `Frame p95 exceeded 50ms: ${p95}`);
+  assert(errors.length === 0, `Browser errors: ${errors.join("; ")}`);
+  assert(externalRequests.length === 0, "Viewer attempted external network requests");
+  console.log(
+    "Browser verification passed: offline, moved report, search, selection, summaries, filters, focus/history, deleted actions, themes, mobile, 100k benchmark.",
+  );
+} finally {
+  await browser.close();
+}

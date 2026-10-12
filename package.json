@@ -1,0 +1,53 @@
+{
+  "name": "mutrix",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write src scripts tests *.json vite.config.ts README.md",
+    "format:check": "prettier --check src scripts tests *.json vite.config.ts README.md",
+    "verify:exe": "bun run scripts/verify-exe.ts",
+    "test": "bun test tests",
+    "build:viewer": "vite build",
+    "build": "bun run build:viewer && bun build --compile --target=bun-windows-x64 ./src/cli/index.ts --outfile ./dist/mutrix.exe",
+    "analyze": "bun run src/cli/index.ts",
+    "demo": "bun run scripts/demo.ts",
+    "verify:browser": "bun build ./scripts/verify-browser.ts --target=node --packages=external --outfile ./artifacts/verify-browser.mjs && node ./artifacts/verify-browser.mjs"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.5.0",
+    "@sun-typeface/suit": "^2.0.5",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "d3-color": "^3.1.0",
+    "d3-hierarchy": "^3.1.2",
+    "d3-selection": "^3.0.0",
+    "d3-zoom": "^3.0.0",
+    "diff": "^9.0.0",
+    "lucide-react": "^1.55.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "simple-icons": "^16.35.0",
+    "tailwind-merge": "^3.7.0",
+    "ts-morph": "^28.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/bun": "^1.4.3",
+    "@types/d3-color": "^3.1.3",
+    "@types/d3-hierarchy": "^3.1.7",
+    "@types/d3-selection": "^3.0.12",
+    "@types/d3-zoom": "^3.0.9",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "prettier": "^3.9.10",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}
