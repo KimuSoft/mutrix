@@ -10,6 +10,7 @@ Usage: mutrix [path] [options]
   --json <path>        Also export schemaVersion 1 analysis JSON
   --summaries <path>   Attach a Summary JSON document
   --exclude <glob>     Additional exclusion; repeat to add patterns
+  --include-generated Include linguist-generated files (excluded by default)
   --open              Open the generated report in the default browser
   --help              Show usage
   --version           Show version
@@ -29,6 +30,7 @@ export function cliOptions(argv: string[]) {
       json: { type: "string" },
       summaries: { type: "string" },
       exclude: { type: "string", multiple: true },
+      "include-generated": { type: "boolean" },
       open: { type: "boolean" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean" },

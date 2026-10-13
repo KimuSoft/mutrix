@@ -5,9 +5,11 @@ export async function git(
   cwd: string,
   args: string[],
   optional = false,
+  input?: string,
 ): Promise<string | undefined> {
   try {
     const child = Bun.spawn(["git", "-C", cwd, ...args], {
+      stdin: input === undefined ? "ignore" : new Blob([input]),
       stdout: "pipe",
       stderr: "pipe",
       env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
@@ -52,8 +54,8 @@ export async function inspectGit(path: string, base?: string): Promise<GitContex
     context.diagnostics.push({
       level: "info",
       message: Bun.which("git")
-        ? "No Git repository found. Showing the current folder structure."
-        : "Git is not installed or not on PATH. Showing folder structure; Git ignore rules are unavailable.",
+        ? "No Git repository found. Showing current structure; Git ignore/attribute rules are unavailable."
+        : "Git is not installed or not on PATH. Showing folder structure; Git ignore/attribute rules are unavailable.",
     });
     return context;
   }

@@ -49,10 +49,16 @@ export interface Report {
     headCommit?: string;
     excluded: string[];
     files: number;
+    generatedExclusions?: GeneratedExclusion[];
   };
   rootId: string;
   nodes: ReportNode[];
   diagnostics: Diagnostic[];
+}
+export interface GeneratedExclusion {
+  path: string;
+  attribute: "linguist-generated";
+  snapshots: ("baseline" | "current")[];
 }
 export interface SummaryDocument {
   schemaVersion: 1;
@@ -63,4 +69,5 @@ export interface AnalyzeOptions {
   base?: string;
   exclude?: string[];
   omit?: string[];
+  includeGenerated?: boolean;
 }

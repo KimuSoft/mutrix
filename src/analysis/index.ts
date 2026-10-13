@@ -13,6 +13,7 @@ import {
 import { analyzeFile } from "./scopes";
 import { ReportTree } from "./tree";
 import { packageInfo } from "./packages";
+import { generatedExclusions } from "./generated";
 import type { AnalyzeOptions, Report } from "../shared/types";
 
 export async function analyze(options: AnalyzeOptions): Promise<Report> {
@@ -27,7 +28,15 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
   const paths =
     (await currentPaths(context)) ?? (await walkFiles(context.root, include, context.diagnostics));
   const baseline = await baselineFiles(context);
-  const allPaths = [...new Set([...paths, ...baseline.keys()])].filter(include).sort();
+  const candidates = [...new Set([...paths, ...baseline.keys()])].filter(include).sort();
+  const generated = options.includeGenerated ? [] : await generatedExclusions(context, candidates);
+  const generatedPaths = new Set(generated.map((entry) => entry.path));
+  const allPaths = candidates.filter((path) => !generatedPaths.has(path));
+  if (generated.length)
+    context.diagnostics.push({
+      level: "info",
+      message: `${generated.length} paths excluded by linguist-generated attributes (baseline/current union). Use --include-generated to include them.`,
+    });
   const tree = new ReportTree(context.mode, basename(context.root));
   let files = 0;
   const objects = baseline.size ? new GitObjects(context.root) : undefined;
@@ -87,6 +96,7 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
       baseCommit: context.baseCommit,
       excluded,
       files,
+      generatedExclusions: generated,
     },
     rootId: "project:root",
     nodes: tree.finish(),

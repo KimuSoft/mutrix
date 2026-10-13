@@ -44,6 +44,7 @@ async function main() {
     path: options.path,
     base: options.base,
     exclude: options.exclude,
+    includeGenerated: options["include-generated"],
     omit: [output, json, summaries].filter((path): path is string => !!path),
   });
   if (summaryDoc) report.diagnostics.push(...attachSummaries(report.nodes, summaryDoc));
