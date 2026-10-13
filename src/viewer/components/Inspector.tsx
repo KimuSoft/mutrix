@@ -12,6 +12,7 @@ import { percentLabel } from "../../shared/colors";
 import { NodeIcon } from "./NodeIcon";
 import { Button } from "./ui/button";
 import { format, signed, copy } from "../lib/utils";
+import { editorUri } from "../lib/node-links";
 
 export function Inspector({
   node,
@@ -33,7 +34,7 @@ export function Inspector({
     "/",
   );
   const range = node.afterRange ?? node.beforeRange;
-  const uri = `vscode://file/${absolute.split("/").map(encodeURIComponent).join("/")}${range?.startLine ? `:${range.startLine}` : ""}`;
+  const uri = editorUri(rootPath, node);
   const doCopy = async (value: string, message: string) => {
     try {
       await copy(value);
@@ -52,7 +53,11 @@ export function Inspector({
         <div className="node-symbol">
           <NodeIcon node={node} size={22} />
         </div>
-        <span>{node.symbolKind ?? node.kind}</span>
+        <span>
+          {node.package
+            ? `package${node.package.after?.name || node.package.before?.name ? ` · ${node.package.after?.name ?? node.package.before?.name}` : ""}`
+            : (node.symbolKind ?? node.kind)}
+        </span>
         <h2>{node.name}</h2>
         <p>{node.path || "Project root"}</p>
       </div>

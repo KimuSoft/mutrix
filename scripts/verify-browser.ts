@@ -8,7 +8,7 @@ import { renderHtml } from "../src/report/html";
 import { benchmarkReport } from "./benchmark";
 import { fileIcon } from "../src/viewer/lib/file-icons";
 import { buildLayout } from "../src/viewer/chart/layout";
-import { fitColumns, projectColumn } from "../src/viewer/chart/columns";
+import { fitColumns } from "../src/viewer/chart/columns";
 import { nodeFill } from "../src/shared/colors";
 import type { ChartCamera } from "../src/viewer/chart/camera";
 import { verifyAxisNavigation, verifyTouchNavigation } from "./verify-navigation";
@@ -94,6 +94,23 @@ async function zoomAndPan() {
   return camera();
 }
 try {
+  const openedLinks: string[] = [];
+  await page.exposeFunction("recordEditorLink", (uri: string) => openedLinks.push(uri));
+  await page.addInitScript(() => {
+    document.addEventListener(
+      "click",
+      (event) => {
+        const anchor = (event.target as Element).closest("a");
+        if (anchor?.href.startsWith("vscode:")) {
+          event.preventDefault();
+          void (
+            window as unknown as { recordEditorLink: (uri: string) => Promise<void> }
+          ).recordEditorLink(anchor.href);
+        }
+      },
+      true,
+    );
+  });
   await page.goto(pathToFileURL(`${artifacts}/moved/report.html`).href);
   await painted();
   const suitLoaded = await page.evaluate(async () => {
@@ -101,6 +118,10 @@ try {
     return fonts.length > 0 && fonts.every((font) => font.status === "loaded");
   });
   assert(suitLoaded, "Embedded SUIT must load offline from the moved report");
+  assert(
+    await page.locator('.tree-node svg[data-node-icon="package"]').count(),
+    "Package root icon missing in tree",
+  );
   await verifyScrollArea(page);
   const controlStyle = await page.locator(".chart-controls").evaluate((element) => ({
     height: element.getBoundingClientRect().height,
@@ -159,7 +180,7 @@ try {
   await chartReady();
   await initialCanvas.dblclick({
     position: {
-      x: 48 + 100 * Math.max(1, (initialBox.width - 48) / 800),
+      x: 72,
       y: initialBox.height * 0.3,
     },
   });
@@ -180,9 +201,7 @@ try {
   await page.locator(".search-result").first().dblclick();
   await chartReady();
   const folderCamera = await zoomAndPan();
-  await page
-    .getByRole("textbox", { name: "Search paths and symbols" })
-    .fill("file:src/editor/document.ts");
+  await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("folder:src/editor");
   await page.locator(".search-result").first().dblclick();
   await chartReady();
   await initialCanvas.dblclick({ position: { x: 24, y: initialBox.height * 0.3 } });
@@ -212,6 +231,56 @@ try {
   await page.getByRole("button", { name: "Reset view", exact: true }).click();
   await chartReady();
   await page.screenshot({ path: `${artifacts}/mutrix-overview.png`, fullPage: true });
+  await page
+    .getByRole("textbox", { name: "Search paths and symbols" })
+    .fill("file:src/editor/document.ts");
+  await page.locator(".search-result").first().dblclick();
+  await page.waitForFunction(
+    () => document.querySelector(".inspector h2")?.textContent === "document.ts",
+  );
+  await page.waitForTimeout(50);
+  assert(
+    openedLinks.length === 1 && openedLinks[0].includes("src/editor/document.ts"),
+    "File search double-click must execute its editor link",
+  );
+  assert(
+    (await page.locator(".chart-breadcrumb nav button").count()) === 1,
+    "Opening a file changed chart focus",
+  );
+  await page
+    .getByRole("textbox", { name: "Search paths and symbols" })
+    .fill("file:src/editor/legacy.ts");
+  await page.locator(".search-result").first().dblclick();
+  assert(
+    await page.getByRole("button", { name: "Open in VS Code", exact: true }).isDisabled(),
+    "Deleted file editor link must be disabled",
+  );
+  assert(openedLinks.length === 1, "Deleted file launched an editor link");
+  await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("");
+  const linkReport = demoReport();
+  const linkLayout = buildLayout(
+    new Map(linkReport.nodes.map((n) => [n.id, n])),
+    linkReport.rootId,
+    { changed: false, extension: "", sort: "path" },
+  )!;
+  const linkBox = (await initialCanvas.boundingBox())!;
+  const linkColumns = fitColumns(linkLayout.root, linkBox.width);
+  const linkNode = linkLayout.nodes.find((n) => n.data.node.id === "file:src/editor/document.ts")!;
+  await initialCanvas.dblclick({
+    position: {
+      x: linkColumns.positions.get(linkNode.data.node.id)!.start + 24,
+      y: (((linkNode.x0 + linkNode.x1) / 2) * linkBox.height) / linkLayout.total,
+    },
+  });
+  await page.waitForTimeout(50);
+  assert(
+    Number(openedLinks.length) === 2,
+    "Canvas file double-click did not launch its editor link",
+  );
+  assert(
+    (await page.locator(".chart-breadcrumb nav button").count()) === 1,
+    "Canvas file activation changed chart focus",
+  );
   // SVG silhouettes must match in tree/search, Inspector, and the offline Canvas.
   for (const path of ["src/ui/Editor.tsx", "src/editor/commands.ts"]) {
     const expected = fileIcon(path)!;
@@ -236,7 +305,7 @@ try {
     const node = layout.nodes.find((n) => n.data.node.id === `file:${path}`)!;
     const box = await initialCanvas.boundingBox();
     assert(box, "Canvas missing during logo check");
-    const columns = fitColumns(layout.width, box.width);
+    const columns = fitColumns(layout.root, box.width);
     const top = (node.x0 * box.height) / layout.total + 0.6;
     const nodeHeight = ((node.x1 - node.x0) * box.height) / layout.total - 1.2;
     const baseline = top + (nodeHeight >= 38 ? 20 : nodeHeight / 2 + 4);
@@ -283,7 +352,7 @@ try {
       {
         path: expected.path,
         background: nodeFill(node.data.node, true, false),
-        x: projectColumn(node.y0, columns) + 12,
+        x: columns.positions.get(node.data.node.id)!.start + 12,
         y: baseline - 12,
       },
     );
@@ -337,6 +406,7 @@ try {
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
   await page.waitForFunction(() => document.querySelector(".zoom-trigger")?.textContent === "1.5×");
   await page.locator(".search-result").first().dblclick();
+  await page.getByRole("button", { name: "영역 확대", exact: true }).click();
   assert(
     (await page.locator(".chart-breadcrumb").textContent())?.includes("document.ts"),
     "Focus/breadcrumb failed",

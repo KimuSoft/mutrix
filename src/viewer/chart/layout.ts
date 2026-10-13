@@ -1,6 +1,6 @@
 import { hierarchy, partition, type HierarchyRectangularNode } from "d3-hierarchy";
 import type { Report, ReportNode } from "../../shared/types";
-import { ROOT_COLUMN_WIDTH } from "./columns";
+import { fitColumns } from "./columns";
 
 export interface Filters {
   changed: boolean;
@@ -71,22 +71,18 @@ export function buildLayout(
   const tree = hierarchy(data).sum((item) => (item.children.length ? 0 : item.weight));
   const columns = tree.height + 1;
   const root = partition<LayoutData>().size([data.weight || 1, columns])(tree);
-  const edges = [0];
-  for (let depth = 0; depth < columns; depth++) {
-    edges.push(
-      edges[depth] + (depth === 0 ? ROOT_COLUMN_WIDTH : Math.max(120, 200 - (depth - 1) * 20)),
-    );
-  }
+  const geometry = fitColumns(root, 0);
   const nodes = root.descendants();
   // Partition depths are relative to the focused root, so drilling in restarts the taper.
   for (const node of nodes) {
-    node.y0 = edges[node.depth];
-    node.y1 = edges[node.depth + 1];
+    const position = geometry.positions.get(node.data.node.id)!;
+    node.y0 = position.start;
+    node.y1 = position.end;
   }
   return {
     root,
     columns,
-    width: edges[columns],
+    width: geometry.width,
     total: data.weight,
     nodes,
   };

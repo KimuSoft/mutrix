@@ -11,6 +11,7 @@ export interface ReportNode {
   name: string;
   path: string;
   symbolKind?: string;
+  package?: { before?: { name?: string }; after?: { name?: string } };
   beforeRange?: SourceRange;
   afterRange?: SourceRange;
   beforeLoc: number;

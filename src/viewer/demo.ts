@@ -41,7 +41,10 @@ export function demoReport(): Report {
     if (parentId) map.get(parentId)!.children.push(id);
     return node;
   }
-  add("project:root", null, "project", "atlas", "");
+  add("project:root", null, "project", "atlas", "").package = {
+    before: { name: "atlas" },
+    after: { name: "atlas" },
+  };
   const files: [string, number, number, string[]][] = [
     ["src/editor/commands.ts", 412, 588, ["createCommand", "dispatch", "resolveSelection"]],
     ["src/editor/document.ts", 680, 452, ["Document", "applyTransaction", "normalize"]],

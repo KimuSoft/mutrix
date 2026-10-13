@@ -6,7 +6,7 @@ import { visibleItems, type DrawItem } from "./lod";
 import { paint, itemRect, type PaintOptions } from "./paint";
 import { Button } from "../components/ui/button";
 import { format, signed } from "../lib/utils";
-import { fitColumns, miniatureColumns, unprojectColumn } from "./columns";
+import { fitColumns, miniatureColumns } from "./columns";
 import { ChartHelp } from "../components/ChartHelp";
 import { ZoomControls } from "../components/ZoomControls";
 import {
@@ -69,7 +69,7 @@ export function MatrixChart({
     let width = 1,
       height = 1,
       sy = 1;
-    let columns = fitColumns(layout.width, 1);
+    let columns = fitColumns(layout.root, 1);
     const startingCamera =
       previousSetup.current?.initialCamera !== initialCamera
         ? initialCamera
@@ -100,11 +100,12 @@ export function MatrixChart({
       };
       const world = visibleWorld(camera, width, height);
       items = visibleItems(layout.root, {
-        left: unprojectColumn(world.left, columns),
-        right: unprojectColumn(world.right, columns),
+        left: world.left,
+        right: world.right,
         top: world.top / sy,
         bottom: world.bottom / sy,
         pixelsPerLine: sy * camera.ky,
+        columns,
       });
       paint(ctx, items, options);
       paintMini();
@@ -146,10 +147,11 @@ export function MatrixChart({
       context.clearRect(0, 0, mw, mh);
       const overview = visibleItems(layout.root, {
         left: 0,
-        right: layout.width,
+        right: columns.width,
         top: 0,
         bottom: layout.total,
         pixelsPerLine: mh / (layout.total || 1),
+        columns,
       });
       paint(context, overview, {
         width: mw,
@@ -195,7 +197,7 @@ export function MatrixChart({
       element.height = Math.round(height * ratio);
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       sy = height / (layout.total || 1);
-      columns = fitColumns(layout.width, width);
+      columns = fitColumns(layout.root, width);
       update(camera);
     };
     const observer = new ResizeObserver(resize);

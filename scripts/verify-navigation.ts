@@ -176,7 +176,7 @@ export async function verifyAxisNavigation(page: Page, artifacts: string) {
     extension: "",
     sort: "path",
   })!;
-  const columns = fitColumns(layout.width, box.width),
+  const columns = fitColumns(layout.root, box.width),
     sy = box.height / layout.total;
   const options = {
     width: box.width,
@@ -191,10 +191,11 @@ export async function verifyAxisNavigation(page: Page, artifacts: string) {
     const world = visibleWorld(value, box.width, box.height);
     return visibleItems(layout.root, {
       left: 0,
-      right: layout.width,
+      right: columns.width,
       top: world.top / sy,
       bottom: world.bottom / sy,
       pixelsPerLine: sy * value.ky,
+      columns,
     });
   };
   const file = itemsFor(unequal).find((item) => {
