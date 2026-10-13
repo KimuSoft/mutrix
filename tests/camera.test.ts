@@ -25,7 +25,45 @@ test("Independent zoom keeps the other axis exact and preserves the cursor's wor
   expect(vertical.x).toBe(original.x);
   expect((cursor.y - vertical.y) / vertical.ky).toBeCloseTo((cursor.y - original.y) / original.ky);
   const both = zoomAt(original, 1.5, "both", cursor);
-  expect(both.kx / both.ky).toBe(original.kx / original.ky);
+  expect(both.kx).toBe(original.kx);
+  expect(both.x).toBe(original.x);
+  expect(both.ky).toBe(6);
+});
+
+test("Shared zoom caps width, reverses the same path, and preserves both cursor anchors", () => {
+  const cursor = { x: 200, y: 300 };
+  const original = identityCamera();
+  const zoomed = zoomAt(original, 10, "both", cursor);
+  expect(zoomed.kx).toBe(1.5);
+  expect(zoomed.ky).toBe(10);
+  const higher = zoomAt(zoomed, 2, "both", cursor);
+  expect(higher.kx).toBe(zoomed.kx);
+  expect(higher.x).toBe(zoomed.x);
+  expect(higher.ky).toBe(20);
+  const down = zoomAt(higher, 0.5, "both", cursor);
+  expect(down).toEqual(zoomed);
+  const threshold = zoomAt(down, 0.15, "both", cursor);
+  expect(threshold.kx).toBe(1.5);
+  expect(threshold.ky).toBe(1.5);
+  const restored = zoomAt(threshold, 1 / 1.5, "both", cursor);
+  expect(restored).toEqual(original);
+  for (const value of [zoomed, higher, threshold]) {
+    expect((cursor.x - value.x) / value.kx).toBeCloseTo(cursor.x);
+    expect((cursor.y - value.y) / value.ky).toBeCloseTo(cursor.y);
+  }
+  const lower = zoomAt(zoomed, 0.0001, "both", cursor);
+  expect(lower.kx).toBe(MIN_SCALE);
+  expect(lower.ky).toBe(MIN_SCALE);
+});
+
+test("Manual horizontal zoom stays available above the shared cap without a mode-switch jump", () => {
+  const cursor = { x: 200, y: 300 };
+  const manual = zoomAt(identityCamera(), 4, "x", cursor);
+  expect(manual.kx).toBe(4);
+  const shared = zoomAt(manual, 10, "both", cursor);
+  expect(shared.kx).toBe(4);
+  expect(shared.x).toBe(manual.x);
+  expect(zoomAt(shared, 0.1, "both", cursor)).toEqual(manual);
 });
 
 test("Each axis clamps at its own limit and invalid zoom input does not corrupt the camera", () => {

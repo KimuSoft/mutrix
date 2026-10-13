@@ -16,6 +16,8 @@ export function ChartHelp() {
         <dd>선택한 축 확대·축소</dd>
         <dt>배율 버튼</dt>
         <dd>함께 · 가로 · 세로 선택과 배율 조정</dd>
+        <dt>함께 확대</dt>
+        <dd>가로는 1.5배까지 · 이후 세로만 확대</dd>
         <dt>Shift + 스크롤</dt>
         <dd>가로 이동</dd>
         <dt>+ / − / Home</dt>

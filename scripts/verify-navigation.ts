@@ -39,6 +39,38 @@ async function axis(page: Page, value: ZoomAxis) {
 export async function verifyAxisNavigation(page: Page, artifacts: string) {
   const canvas = page.locator(".matrix-host > canvas");
   const box = (await canvas.boundingBox())!;
+  const zoomIn = page.getByRole("button", { name: "Zoom in", exact: true });
+  const zoomOut = page.getByRole("button", { name: "Zoom out", exact: true });
+  await zoomIn.click();
+  const threshold = await camera(page);
+  await zoomIn.click();
+  const capped = await camera(page);
+  assert(near(threshold.kx, 1.5) && near(threshold.ky, 1.5), "Shared zoom must start on both axes");
+  assert(
+    capped.kx === threshold.kx && capped.x === threshold.x && near(capped.ky, 2.25),
+    "Shared zoom widened a column past 1.5x",
+  );
+  await page.mouse.move(box.x + Math.floor(box.width / 2), box.y + Math.floor(box.height / 2));
+  await page.mouse.wheel(0, -120);
+  const more = await camera(page);
+  assert(
+    more.kx === capped.kx && more.x === capped.x && more.ky > capped.ky,
+    "Shared wheel did not preserve the horizontal cap",
+  );
+  await page.mouse.wheel(0, 120);
+  await zoomOut.click();
+  const back = await camera(page);
+  assert(
+    near(back.kx, 1.5) && near(back.ky, 1.5) && near(back.x, threshold.x),
+    "Shared zoom-out changed width before reaching 1.5x",
+  );
+  await zoomOut.click();
+  const initial = await camera(page);
+  assert(
+    near(initial.kx, 1) && near(initial.ky, 1),
+    "Shared zoom-out must shrink both axes below the threshold",
+  );
+  await page.getByRole("button", { name: "Reset view", exact: true }).click();
   await page.getByRole("button", { name: "배율 조정", exact: true }).click();
   await page.getByRole("radio", { name: "함께", exact: true }).focus();
   await page.keyboard.press("ArrowRight");
@@ -79,6 +111,10 @@ export async function verifyAxisNavigation(page: Page, artifacts: string) {
   );
   await canvas.focus();
   await page.keyboard.press("+");
+  assert(
+    await canvas.evaluate((element) => getComputedStyle(element).outlineStyle !== "none"),
+    "Keyboard users must retain a Canvas focus indicator",
+  );
   const keyed = await camera(page);
   assert(
     keyed.kx === wheel.kx && near(keyed.ky, wheel.ky * 1.5),
@@ -113,6 +149,13 @@ export async function verifyAxisNavigation(page: Page, artifacts: string) {
   await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
   await page.mouse.down();
   await page.mouse.move(box.x - 10, box.y + box.height * 0.5, { steps: 8 });
+  assert(
+    await canvas.evaluate(
+      (element) =>
+        document.activeElement === element && getComputedStyle(element).outlineStyle === "none",
+    ),
+    "Pointer drag must focus Canvas without drawing a focus ring",
+  );
   await page.mouse.up();
   assert(
     (await page.locator(".node-id").textContent()) === selection,

@@ -12,6 +12,7 @@ import { fitColumns, projectColumn } from "../src/viewer/chart/columns";
 import { nodeFill } from "../src/shared/colors";
 import type { ChartCamera } from "../src/viewer/chart/camera";
 import { verifyAxisNavigation, verifyTouchNavigation } from "./verify-navigation";
+import { verifyScrollArea } from "./verify-scroll-area";
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -83,6 +84,7 @@ async function zoomAndPan() {
   await page.getByRole("button", { name: "가로 확대", exact: true }).click();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
   const box = await page.locator(".matrix-host > canvas").boundingBox();
   assert(box, "Canvas missing before pan");
   await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.4);
@@ -99,6 +101,28 @@ try {
     return fonts.length > 0 && fonts.every((font) => font.status === "loaded");
   });
   assert(suitLoaded, "Embedded SUIT must load offline from the moved report");
+  await verifyScrollArea(page);
+  const controlStyle = await page.locator(".chart-controls").evaluate((element) => ({
+    height: element.getBoundingClientRect().height,
+    blur: getComputedStyle(element).backdropFilter,
+  }));
+  const corner = await page.locator(".chart-controls").evaluate((element) => {
+    const toolbar = element.getBoundingClientRect();
+    const region = element.closest(".matrix-region")!.getBoundingClientRect();
+    return { left: toolbar.left - region.left, bottom: region.bottom - toolbar.bottom };
+  });
+  assert(
+    Math.abs(corner.left - 10) < 0.5 && Math.abs(corner.bottom - 10) < 0.5,
+    "Toolbar must sit 10px from the workspace corner",
+  );
+  assert(
+    (await page.locator('.matrix-region [data-slot="scroll-area"]').count()) === 0,
+    "ScrollArea must be confined to the Explorer",
+  );
+  assert(
+    controlStyle.height <= 30 && controlStyle.blur.includes("blur"),
+    `Chart controls must be compact with a blurred backdrop: ${JSON.stringify(controlStyle)}`,
+  );
   assert(
     await page.getByRole("button", { name: "Summary 불러오기", exact: true }).isVisible(),
     "Offline viewer did not load",

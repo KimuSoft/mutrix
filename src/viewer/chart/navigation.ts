@@ -40,6 +40,7 @@ export function bindNavigation(element: HTMLCanvasElement, options: Options) {
     const point = local(event);
     pointers.set(event.pointerId, { ...point, originX: point.x, originY: point.y });
     element.setPointerCapture(event.pointerId);
+    element.dataset.pointerFocus = "true";
     element.focus({ preventScroll: true });
   };
   const move = (event: PointerEvent) => {
@@ -81,6 +82,9 @@ export function bindNavigation(element: HTMLCanvasElement, options: Options) {
       );
   };
   const key = (event: KeyboardEvent) => {
+    if (event.key === "Tab") delete element.dataset.pointerFocus;
+    if (event.target !== element) return;
+    delete element.dataset.pointerFocus;
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (event.key === "+" || event.key === "=") scale(1.5);
     else if (event.key === "-") scale(1 / 1.5);
@@ -96,7 +100,7 @@ export function bindNavigation(element: HTMLCanvasElement, options: Options) {
   element.addEventListener("click", click, true);
   element.addEventListener("dblclick", click, true);
   element.addEventListener("wheel", wheel, { passive: false });
-  element.addEventListener("keydown", key);
+  document.addEventListener("keydown", key);
   return {
     scale,
     reset: () => update(identityCamera()),
@@ -112,7 +116,7 @@ export function bindNavigation(element: HTMLCanvasElement, options: Options) {
       element.removeEventListener("click", click, true);
       element.removeEventListener("dblclick", click, true);
       element.removeEventListener("wheel", wheel);
-      element.removeEventListener("keydown", key);
+      document.removeEventListener("keydown", key);
       for (const id of pointers.keys())
         if (element.hasPointerCapture(id)) element.releasePointerCapture(id);
       pointers.clear();

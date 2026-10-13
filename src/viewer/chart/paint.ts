@@ -117,7 +117,10 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
       if (w >= 20 && h >= 60) {
         ctx.translate(x + w / 2, y + h / 2);
         ctx.rotate(-Math.PI / 2);
-        const loc = `${item.nodes[0].data.afterLoc.toLocaleString()} LOC`;
+        const current = item.nodes[0].data.afterLoc.toLocaleString();
+        const loc = changes
+          ? `${item.nodes[0].data.beforeLoc.toLocaleString()} → ${current} LOC`
+          : `${current} LOC`;
         const nameWidth = ctx.measureText(text).width;
         ctx.font = '10px "SUIT Variable", system-ui, sans-serif';
         const locWidth = ctx.measureText(loc).width;

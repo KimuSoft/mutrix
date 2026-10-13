@@ -12,6 +12,7 @@ export interface CameraBounds {
 }
 export const MIN_SCALE = 0.3;
 export const MAX_SCALE = 20000;
+export const SHARED_X_LIMIT = 1.5;
 export const identityCamera = (): ChartCamera => ({ x: 0, y: 0, kx: 1, ky: 1 });
 
 const limitScale = (value: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, value));
@@ -34,8 +35,20 @@ export function zoomAt(
   point: { x: number; y: number },
 ): ChartCamera {
   if (!Number.isFinite(factor) || factor <= 0) return camera;
-  const kx = axis === "y" ? camera.kx : limitScale(camera.kx * factor);
   const ky = axis === "x" ? camera.ky : limitScale(camera.ky * factor);
+  // The shared gesture follows vertical zoom; its horizontal part stops at 1.5x.
+  // Keep a manually widened column intact rather than snapping it back to the cap.
+  const kx =
+    axis === "x"
+      ? limitScale(camera.kx * factor)
+      : axis === "y" || camera.kx > SHARED_X_LIMIT
+        ? camera.kx
+        : limitScale(
+            Math.min(
+              SHARED_X_LIMIT,
+              (camera.kx * Math.min(ky, SHARED_X_LIMIT)) / Math.min(camera.ky, SHARED_X_LIMIT),
+            ),
+          );
   return {
     kx,
     ky,
