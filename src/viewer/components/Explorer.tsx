@@ -5,6 +5,7 @@ import type { Filters } from "../chart/layout";
 import { NodeIcon } from "./NodeIcon";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import { ScrollArea } from "./ui/scroll-area";
 import { format, signed } from "../lib/utils";
 
 interface Props {
@@ -136,92 +137,100 @@ export function Explorer({
         변경된 영역만
         <span>{nodes.filter((n) => n.kind === "file" && n.status !== "unchanged").length}</span>
       </label>
-      <div
-        className="tree-list"
-        role="tree"
-        aria-label={query ? "Search results" : "Code structure"}
-      >
-        {query ? (
-          <>
-            <p className="result-count">
-              {format(results.length)} results{results.length > 100 && " · first 100 shown"}
-            </p>
-            {results.slice(0, 100).map((node) => (
-              <button
-                key={node.id}
-                className={`search-result ${selected === node.id ? "selected" : ""}`}
-                onClick={() => onSelect(node.id)}
-                onDoubleClick={() => onFocus(node.id)}
-              >
-                <NodeIcon node={node} />
-                <span>
-                  <strong>{node.name}</strong>
-                  <small>{node.path}</small>
-                </span>
-                <em className={`delta ${node.status}`}>{signed(node.delta)}</em>
-              </button>
-            ))}
-          </>
-        ) : (
-          rows.map(({ node, depth, more }, i) =>
-            more ? (
-              <Button
-                key={`${node.id}-more-${i}`}
-                variant="ghost"
-                size="sm"
-                className="more-row"
-                onClick={() => setLimits({ ...limits, [node.id]: (limits[node.id] ?? 100) + 100 })}
-              >
-                + {format(more)} more
-              </Button>
-            ) : (
-              <div
-                key={node.id}
-                className={`tree-row ${selected === node.id ? "selected" : ""}`}
-                style={{ paddingLeft: 8 + depth * 13 }}
-                role="treeitem"
-                aria-expanded={node.children.length ? expanded.has(node.id) : undefined}
-                aria-selected={selected === node.id}
-              >
-                {node.children.length ? (
-                  <button
-                    className="tree-caret"
-                    aria-label={`${expanded.has(node.id) ? "Collapse" : "Expand"} ${node.name}`}
-                    onClick={() => toggle(node.id)}
-                  >
-                    {expanded.has(node.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                  </button>
-                ) : (
-                  <span className="tree-caret" />
-                )}
+      <ScrollArea className="tree-scroll-area">
+        <div
+          className="tree-list"
+          role="tree"
+          aria-label={query ? "Search results" : "Code structure"}
+        >
+          {query ? (
+            <>
+              <p className="result-count">
+                {format(results.length)} results{results.length > 100 && " · first 100 shown"}
+              </p>
+              {results.slice(0, 100).map((node) => (
                 <button
-                  className="tree-node"
+                  key={node.id}
+                  className={`search-result ${selected === node.id ? "selected" : ""}`}
                   onClick={() => onSelect(node.id)}
                   onDoubleClick={() => onFocus(node.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === "ArrowRight") {
-                      setExpanded((prev) => new Set([...prev, node.id]));
-                    }
-                    if (e.key === "ArrowLeft") {
-                      if (expanded.has(node.id)) toggle(node.id);
-                      else if (node.parentId) onSelect(node.parentId);
-                    }
-                  }}
                 >
                   <NodeIcon node={node} />
-                  <span>{node.name}</span>
-                  {changes && node.status !== "unchanged" && (
-                    <i className={`change-dot ${node.status}`} />
-                  )}
+                  <span>
+                    <strong>{node.name}</strong>
+                    <small>{node.path}</small>
+                  </span>
+                  <em className={`delta ${node.status}`}>{signed(node.delta)}</em>
                 </button>
-              </div>
-            ),
-          )
-        )}
-        {query && results.length === 0 && (
-          <p className="result-count">일치하는 파일·심볼이 없습니다.</p>
-        )}
-      </div>
+              ))}
+            </>
+          ) : (
+            rows.map(({ node, depth, more }, i) =>
+              more ? (
+                <Button
+                  key={`${node.id}-more-${i}`}
+                  variant="ghost"
+                  size="sm"
+                  className="more-row"
+                  onClick={() =>
+                    setLimits({ ...limits, [node.id]: (limits[node.id] ?? 100) + 100 })
+                  }
+                >
+                  + {format(more)} more
+                </Button>
+              ) : (
+                <div
+                  key={node.id}
+                  className={`tree-row ${selected === node.id ? "selected" : ""}`}
+                  style={{ paddingLeft: 8 + depth * 13 }}
+                  role="treeitem"
+                  aria-expanded={node.children.length ? expanded.has(node.id) : undefined}
+                  aria-selected={selected === node.id}
+                >
+                  {node.children.length ? (
+                    <button
+                      className="tree-caret"
+                      aria-label={`${expanded.has(node.id) ? "Collapse" : "Expand"} ${node.name}`}
+                      onClick={() => toggle(node.id)}
+                    >
+                      {expanded.has(node.id) ? (
+                        <ChevronDown size={12} />
+                      ) : (
+                        <ChevronRight size={12} />
+                      )}
+                    </button>
+                  ) : (
+                    <span className="tree-caret" />
+                  )}
+                  <button
+                    className="tree-node"
+                    onClick={() => onSelect(node.id)}
+                    onDoubleClick={() => onFocus(node.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowRight") {
+                        setExpanded((prev) => new Set([...prev, node.id]));
+                      }
+                      if (e.key === "ArrowLeft") {
+                        if (expanded.has(node.id)) toggle(node.id);
+                        else if (node.parentId) onSelect(node.parentId);
+                      }
+                    }}
+                  >
+                    <NodeIcon node={node} />
+                    <span>{node.name}</span>
+                    {changes && node.status !== "unchanged" && (
+                      <i className={`change-dot ${node.status}`} />
+                    )}
+                  </button>
+                </div>
+              ),
+            )
+          )}
+          {query && results.length === 0 && (
+            <p className="result-count">일치하는 파일·심볼이 없습니다.</p>
+          )}
+        </div>
+      </ScrollArea>
     </aside>
   );
 }

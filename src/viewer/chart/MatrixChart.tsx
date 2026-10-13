@@ -321,43 +321,6 @@ export function MatrixChart({
             )}
           </div>
         )}
-        <div className="chart-controls">
-          <Button
-            variant="ghost"
-            size="icon"
-            title="Zoom out"
-            aria-label="Zoom out"
-            onClick={() => api.current?.scale(1 / 1.5)}
-          >
-            <Minus />
-          </Button>
-          <ZoomControls
-            camera={displayCamera}
-            axis={axis}
-            onAxis={setAxis}
-            onZoom={(factor, axis) => api.current?.scale(factor, axis)}
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            title="Zoom in"
-            aria-label="Zoom in"
-            onClick={() => api.current?.scale(1.5)}
-          >
-            <Plus />
-          </Button>
-          <i />
-          <Button
-            variant="ghost"
-            size="icon"
-            title="Reset view"
-            aria-label="Reset view"
-            onClick={() => api.current?.reset()}
-          >
-            <Scan />
-          </Button>
-          <ChartHelp />
-        </div>
         {layout && layout.total > 0 && (
           <button
             className="minimap"
@@ -367,6 +330,43 @@ export function MatrixChart({
             <canvas width={126} height={78} ref={mini} />
           </button>
         )}
+      </div>
+      <div className="chart-controls">
+        <Button
+          variant="ghost"
+          size="icon"
+          title="Zoom out"
+          aria-label="Zoom out"
+          onClick={() => api.current?.scale(1 / 1.5)}
+        >
+          <Minus />
+        </Button>
+        <ZoomControls
+          camera={displayCamera}
+          axis={axis}
+          onAxis={setAxis}
+          onZoom={(factor, axis) => api.current?.scale(factor, axis)}
+        />
+        <Button
+          variant="ghost"
+          size="icon"
+          title="Zoom in"
+          aria-label="Zoom in"
+          onClick={() => api.current?.scale(1.5)}
+        >
+          <Plus />
+        </Button>
+        <i />
+        <Button
+          variant="ghost"
+          size="icon"
+          title="Reset view"
+          aria-label="Reset view"
+          onClick={() => api.current?.reset()}
+        >
+          <Scan />
+        </Button>
+        <ChartHelp />
       </div>
     </div>
   );

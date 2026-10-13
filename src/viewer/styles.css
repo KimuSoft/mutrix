@@ -301,11 +301,46 @@ button {
     system-ui,
     sans-serif;
 }
-.tree-list {
+.tree-scroll-area {
   flex: 1;
   min-height: 0;
-  overflow: auto;
   border-top: 1px solid var(--line);
+}
+.scroll-area {
+  position: relative;
+  overflow: hidden;
+}
+.scroll-area-viewport {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+.tree-scroll-area .scroll-area-viewport > div {
+  display: block !important;
+}
+.scroll-area-scrollbar {
+  display: flex;
+  touch-action: none;
+  user-select: none;
+  padding: 2px;
+}
+.scroll-area-scrollbar[data-orientation="vertical"] {
+  width: 10px;
+}
+.scroll-area-scrollbar[data-orientation="horizontal"] {
+  height: 10px;
+  flex-direction: column;
+}
+.scroll-area-thumb {
+  position: relative;
+  flex: 1;
+  border-radius: 999px;
+  background: var(--line);
+}
+.scroll-area-thumb:hover {
+  background: var(--muted);
+}
+.tree-list {
   padding: 9px 0;
 }
 .tree-row {
@@ -477,6 +512,9 @@ button {
   left: 0;
   touch-action: none;
 }
+.matrix-host > canvas[data-pointer-focus]:focus {
+  outline: none;
+}
 .axis-label {
   position: absolute;
   writing-mode: vertical-rl;
@@ -495,32 +533,51 @@ button {
 }
 .chart-controls {
   position: absolute;
-  bottom: 16px;
-  left: 14px;
+  bottom: 10px;
+  left: 10px;
   display: flex;
   align-items: center;
-  padding: 3px;
-  border: 1px solid var(--line);
-  background: var(--background);
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
+  background: color-mix(in srgb, var(--background) 68%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: var(--muted);
   border-radius: 6px;
   box-shadow: 0 2px 7px #00000008;
 }
-.chart-controls .zoom-trigger {
+.chart-control-popover {
+  display: flex;
+  align-items: center;
+}
+.chart-controls > [data-slot="button"],
+.chart-controls > .chart-control-popover > [data-slot="button"] {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 4px;
+}
+.chart-controls > [data-slot="button"] svg,
+.chart-controls > .chart-control-popover > [data-slot="button"] svg {
+  width: 14px;
+  height: 14px;
+}
+.chart-controls > .chart-control-popover > .zoom-trigger {
   font:
     10px "SUIT Variable",
     system-ui,
     sans-serif;
   width: auto;
-  min-width: 44px;
-  padding: 0 6px;
+  min-width: 40px;
+  padding: 0 4px;
   text-align: center;
   color: var(--muted);
 }
 .chart-controls i {
   width: 1px;
-  height: 16px;
+  height: 12px;
   background: var(--line);
-  margin: 0 3px;
+  margin: 0 2px;
 }
 .minimap {
   position: absolute;
@@ -1052,6 +1109,13 @@ button {
   }
   .inspector {
     width: 230px;
+  }
+}
+@media (pointer: coarse) {
+  .chart-controls > [data-slot="button"],
+  .chart-controls > .chart-control-popover > [data-slot="button"] {
+    min-width: 32px;
+    height: 32px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

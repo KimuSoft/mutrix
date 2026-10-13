@@ -17,6 +17,7 @@
     "verify:browser": "bun build ./scripts/verify-browser.ts --target=node --packages=external --outfile ./artifacts/verify-browser.mjs && node ./artifacts/verify-browser.mjs"
   },
   "dependencies": {
+    "@radix-ui/react-scroll-area": "^1.4.0",
     "@radix-ui/react-slot": "^1.5.0",
     "@sun-typeface/suit": "^2.0.5",
     "class-variance-authority": "^0.7.1",
