@@ -1,6 +1,6 @@
 import { Node, Project, ScriptKind, type SourceFile } from "ts-morph";
 import { physicalLines } from "./lines";
-import type { Diagnostic, SourceRange } from "../shared/types";
+import type { Diagnostic, SourceRange, FunctionSignature } from "../shared/types";
 
 export interface ScopeInfo {
   key: string;
@@ -13,6 +13,7 @@ export interface ScopeInfo {
   ownLoc: number;
   ownText: string;
   jsDoc?: string;
+  signature?: FunctionSignature;
 }
 export interface FileAnalysis {
   text: string;
@@ -55,6 +56,28 @@ function scopeName(node: Node): string {
 }
 
 const sourceExtensions = /\.(?:[cm]?[jt]s|[jt]sx)$/i;
+
+/** Preserve declared types without resolving dependencies or inventing inferred types. */
+function scopeSignature(node: Node): FunctionSignature | undefined {
+  if (
+    !Node.isFunctionDeclaration(node) &&
+    !Node.isFunctionExpression(node) &&
+    !Node.isArrowFunction(node) &&
+    !Node.isMethodDeclaration(node) &&
+    !Node.isGetAccessorDeclaration(node) &&
+    !Node.isSetAccessorDeclaration(node)
+  )
+    return undefined;
+  return {
+    parameters: node.getParameters().map((parameter) => ({
+      name: parameter.getName(),
+      type: parameter.getTypeNode()?.getText() ?? "unknown",
+      optional: !!parameter.getQuestionTokenNode() || !!parameter.getInitializer(),
+      rest: parameter.isRestParameter(),
+    })),
+    returnType: node.getReturnTypeNode()?.getText() ?? "unknown",
+  };
+}
 
 /** Read attached JSDoc only; a containing function's docs never belong to its callbacks. */
 function scopeDocumentation(node: Node): string | undefined {
@@ -160,6 +183,7 @@ export function analyzeFile(path: string, text: string): FileAnalysis {
           ownLoc: 0,
           ownText: "",
           jsDoc: scopeDocumentation(node),
+          signature: scopeSignature(node),
         });
         // Preorder traversal ensures earlier source positions win equal-depth ties.
         for (let line = startLine - 1; line < Math.min(endLine, lines.length); line++) {

@@ -4,6 +4,10 @@ export interface SourceRange {
   startLine: number;
   endLine: number;
 }
+export interface FunctionSignature {
+  parameters: { name: string; type: string; optional: boolean; rest: boolean }[];
+  returnType: string;
+}
 export interface ReportNode {
   id: string;
   parentId: string | null;
@@ -12,6 +16,7 @@ export interface ReportNode {
   path: string;
   symbolKind?: string;
   documentation?: { before?: string; after?: string };
+  signature?: { before?: FunctionSignature; after?: FunctionSignature };
   package?: { before?: { name?: string }; after?: { name?: string } };
   beforeRange?: SourceRange;
   afterRange?: SourceRange;

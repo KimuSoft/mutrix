@@ -77,15 +77,19 @@ test("painting, hit rectangles and horizontal culling agree after zoom and pan",
   expect(rect.y).toBe(file.x0 * 4 - 13);
 });
 
-test("all folders stay thin, mixed siblings meet their own children, and minimap shares ratios", () => {
+test("ordinary folders stay thin, packages share file widths, and minimap shares ratios", () => {
   const report = demoReport();
   const layout = buildLayout(reportIndex(report), report.rootId, filters)!;
   for (const viewport of [300, 900, 1600]) {
     const columns = fitColumns(layout.root, viewport);
     const mini = miniatureColumns(columns, 126);
+    const file = layout.nodes.find((node) => node.data.node.kind === "file")!;
+    const fileEdge = columns.positions.get(file.data.node.id)!;
     for (const node of layout.nodes) {
       const edge = columns.positions.get(node.data.node.id)!;
-      if (node.data.node.kind === "folder" || node.data.node.kind === "project")
+      if (node.data.node.package)
+        expect(edge.end - edge.start).toBeCloseTo(fileEdge.end - fileEdge.start);
+      else if (node.data.node.kind === "folder" || node.data.node.kind === "project")
         expect(edge.end - edge.start).toBe(48);
       else expect(edge.end - edge.start).toBeGreaterThanOrEqual(100);
       if (node.data.node.kind === "file" && node.children?.length) {
@@ -100,7 +104,7 @@ test("all folders stay thin, mixed siblings meet their own children, and minimap
     }
   }
   const rootOnly = buildLayout(
-    new Map([[report.rootId, { ...report.nodes[0], children: [] }]]),
+    new Map([[report.rootId, { ...report.nodes[0], package: undefined, children: [] }]]),
     report.rootId,
     filters,
   )!;

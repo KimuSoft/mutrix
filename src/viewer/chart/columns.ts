@@ -9,7 +9,7 @@ export interface ColumnGeometry {
   width: number;
 }
 
-/** Each branch reserves fixed folder widths; only file/scope widths stretch to fit. */
+/** Each branch reserves fixed folder widths; package/file/scope widths stretch to fit. */
 export function fitColumns(root: LayoutNode, viewportWidth: number): ColumnGeometry {
   const spans = new Map<
     LayoutNode,
@@ -20,10 +20,12 @@ export function fitColumns(root: LayoutNode, viewportWidth: number): ColumnGeome
     const parent = node.parent ? spans.get(node.parent)! : undefined;
     const fixed = parent ? parent.fixed + (parent.folder ? parent.width : 0) : 0;
     const flexible = parent ? parent.flexible + (parent.folder ? 0 : parent.width) : 0;
-    const folder = node.data.node.kind === "project" || node.data.node.kind === "folder";
+    const reportNode = node.data.node;
+    const folder =
+      (reportNode.kind === "project" || reportNode.kind === "folder") && !reportNode.package;
     const width = folder
       ? FOLDER_COLUMN_WIDTH
-      : node.data.node.kind === "file"
+      : reportNode.kind === "file" || reportNode.package
         ? FILE_COLUMN_WIDTH
         : SYMBOL_COLUMN_WIDTH;
     spans.set(node, { fixed, flexible, width, folder });

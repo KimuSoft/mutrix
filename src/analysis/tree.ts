@@ -76,6 +76,10 @@ export class ReportTree {
       const beforeDoc = oldScopes.get(key)?.jsDoc;
       const afterDoc = newScopes.get(key)?.jsDoc;
       if (beforeDoc || afterDoc) node.documentation = { before: beforeDoc, after: afterDoc };
+      const beforeSignature = oldScopes.get(key)?.signature;
+      const afterSignature = newScopes.get(key)?.signature;
+      if (beforeSignature || afterSignature)
+        node.signature = { before: beforeSignature, after: afterSignature };
     }
     const ownerId = (owner: string | null) => (owner ? `scope:${path}#${owner}` : file.id);
     for (const analysis of [before, after]) {

@@ -1,4 +1,5 @@
 import { color } from "d3-color";
+import type { FunctionSignature } from "../../shared/types";
 import type { DrawItem } from "./lod";
 import type { ChartCamera } from "./camera";
 import { nodeFill } from "../../shared/colors";
@@ -113,6 +114,71 @@ function paintFileIcon(ctx: CanvasRenderingContext2D, path: string, x: number, y
   ctx.restore();
 }
 
+function paintTypeRow(
+  ctx: CanvasRenderingContext2D,
+  name: string,
+  type: string,
+  x: number,
+  y: number,
+  width: number,
+) {
+  const label = fitText(ctx, name, width * 0.45);
+  ctx.fillText(label, x, y);
+  const badgeX = x + ctx.measureText(label).width + 6;
+  ctx.save();
+  ctx.font = '500 10px "SUIT Variable", system-ui, sans-serif';
+  const text = fitText(ctx, type, x + width - badgeX - 8);
+  const badgeWidth = ctx.measureText(text).width + 8;
+  const opacity = ctx.globalAlpha;
+  ctx.beginPath();
+  ctx.roundRect(badgeX, y - 12, badgeWidth, 17, 3);
+  ctx.globalAlpha = opacity * 0.09;
+  ctx.fill();
+  ctx.globalAlpha = opacity * 0.22;
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.globalAlpha = opacity;
+  ctx.fillText(text, badgeX + 4, y);
+  ctx.restore();
+}
+
+function paintSignature(
+  ctx: CanvasRenderingContext2D,
+  signature: FunctionSignature,
+  x: number,
+  y: number,
+  width: number,
+  maxRows: number,
+): number {
+  if (maxRows < 3) return y;
+  const compact = (text: string) => text.replace(/\s+/g, " ").trim();
+  const parameters = signature.parameters.map((parameter) => ({
+    name: `${parameter.rest ? "..." : ""}${compact(parameter.name)}${parameter.optional ? "?" : ""}`,
+    type: compact(parameter.type),
+  }));
+  const slots = maxRows - 1;
+  const rows = parameters.length ? parameters.slice(0, slots) : [{ name: "인자 없음", type: "" }];
+  if (parameters.length > slots)
+    rows[slots - 1] = { name: `… ${parameters.length - slots + 1}개 인자`, type: "" };
+  rows.forEach((row, index) => {
+    if (row.type) paintTypeRow(ctx, row.name, row.type, x, y + index * 20, width);
+    else ctx.fillText(fitText(ctx, row.name, width), x, y + index * 20);
+  });
+  const returnY = y + rows.length * 20 + 12;
+  ctx.save();
+  ctx.globalAlpha *= 0.35;
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x, returnY - 20);
+  ctx.lineTo(x + width, returnY - 20);
+  ctx.stroke();
+  ctx.restore();
+  paintTypeRow(ctx, "return", compact(signature.returnType), x, returnY, width);
+  return returnY + 22;
+}
+
 export interface PaintOptions {
   width: number;
   height: number;
@@ -178,19 +244,21 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
       ctx.lineWidth = selected ? 2 : 1;
       ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
     }
-    const contextColumn = !item.aggregate && (node.kind === "project" || node.kind === "folder");
+    const contextColumn =
+      !item.aggregate && (node.kind === "project" || node.kind === "folder") && !node.package;
     if (h < 18 || (w < 65 && !contextColumn)) continue;
     const text = item.aggregate ? `${item.nodes.length} 영역` : node.name;
     const data = item.nodes[0].data;
     const badges = !item.aggregate
       ? nodeBadges(node, changes, options.warnLoc, data.afterLoc - data.beforeLoc)
       : [];
-    const info = !item.aggregate && folderHasDescription(node);
+    const info = !item.aggregate && !node.package && folderHasDescription(node);
     const documentation =
       node.status === "deleted" ? node.documentation?.before : node.documentation?.after;
-    const description = !item.aggregate
-      ? [node.summary && `변경: ${node.summary}`, documentation].filter(Boolean).join("\n")
-      : "";
+    const description =
+      !item.aggregate && (node.package || (node.kind !== "folder" && node.kind !== "project"))
+        ? [node.summary && `변경: ${node.summary}`, documentation].filter(Boolean).join("\n")
+        : "";
     const fill = color(String(ctx.fillStyle));
     const rgb = fill?.rgb();
     const luminance = rgb ? rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114 : 160;
@@ -248,34 +316,59 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
           : node.kind === "project"
             ? "▥"
             : "·";
-    const labelX = x + (!item.aggregate && node.kind === "file" ? 30 : 10);
-    const labelText = !item.aggregate && node.kind !== "file" ? `${icon}  ${text}` : text;
+    const fileLike = node.kind === "file" || !!node.package;
+    const labelX = x + (!item.aggregate && fileLike ? 30 : 10);
+    const labelText = !item.aggregate && !fileLike ? `${icon}  ${text}` : text;
     const badgeWidth = badgesWidth(ctx, badges);
-    const horizontalBadges = w >= badgeWidth + 80 ? badges : [];
+    const infoSpace = info ? 16 : 0;
+    const horizontalBadges = w >= badgeWidth + 80 + infoSpace ? badges : [];
     const label = fitText(
       ctx,
       labelText,
-      right - labelX - (horizontalBadges.length ? badgeWidth + 15 : 10),
+      right - labelX - (horizontalBadges.length ? badgeWidth + 15 : 10) - infoSpace,
     );
-    if (!item.aggregate && node.kind === "file") {
-      paintFileIcon(ctx, node.path, x + 10, baseline - 12);
+    if (!item.aggregate && fileLike) {
+      if (node.package) paintFolderIcon(ctx, true, x + 10, baseline - 12);
+      else paintFileIcon(ctx, node.path, x + 10, baseline - 12);
     }
     ctx.fillText(label, labelX, baseline);
     paintBadges(ctx, horizontalBadges, labelX + ctx.measureText(label).width + 7, baseline, dark);
+    if (info)
+      paintInfo(
+        ctx,
+        labelX + ctx.measureText(label).width + (horizontalBadges.length ? badgeWidth + 4 : 4),
+        baseline - 10,
+      );
     if (h >= 38) {
       ctx.globalAlpha = (changes && unchanged ? 0.38 : 0.8) * textOpacity;
       ctx.font = '11px "SUIT Variable", system-ui, sans-serif';
       const lines =
-        changes && !item.aggregate && node.kind === "file"
+        changes && !item.aggregate && fileLike
           ? `${data.beforeLoc.toLocaleString()} → ${data.afterLoc.toLocaleString()} LOC`
           : `${(item.aggregate ? item.nodes.reduce((sum, n) => sum + n.data.afterLoc, 0) : data.afterLoc).toLocaleString()} LOC`;
       ctx.fillText(lines, x + 10, y + 36);
     }
-    if (description && w >= 100 && h >= 68) {
+    let bodyY = y + 53;
+    if (!item.aggregate && w >= 100 && h >= 108) {
+      const signature = node.status === "deleted" ? node.signature?.before : node.signature?.after;
+      if (signature) {
+        ctx.font = '11px "SUIT Variable", system-ui, sans-serif';
+        ctx.globalAlpha = (changes && unchanged ? 0.65 : 0.85) * textOpacity;
+        bodyY = paintSignature(
+          ctx,
+          signature,
+          x + 10,
+          bodyY,
+          w - 20,
+          Math.min(8, Math.floor((h - 65) / 20)),
+        );
+      }
+    }
+    if (description && w >= 100 && bottom - bodyY >= 15) {
       ctx.font = '11px "SUIT Variable", system-ui, sans-serif';
       ctx.globalAlpha = (changes && unchanged ? 0.65 : 0.85) * textOpacity;
-      wrapText(ctx, description, w - 20, Math.min(12, Math.floor((h - 53) / 15))).forEach(
-        (line, index) => ctx.fillText(line, x + 10, y + 53 + index * 15),
+      wrapText(ctx, description, w - 20, Math.min(12, Math.floor((bottom - bodyY) / 15))).forEach(
+        (line, index) => ctx.fillText(line, x + 10, bodyY + index * 15),
       );
     }
     ctx.restore();
