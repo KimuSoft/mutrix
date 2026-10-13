@@ -94,9 +94,11 @@ test("CLI argument paths and exclusions", () => {
     "--exclude",
     "**/*.md",
     "--open",
+    "--include-generated",
   ]);
   expect(options.exclude).toEqual(["**/fixtures/**", "**/*.md"]);
   expect(options.open).toBe(true);
+  expect(options["include-generated"]).toBe(true);
   expect(() => cliOptions(["--output", "same", "--json", "same"])).toThrow("must be different");
   expect(() => cliOptions(["a", "b"])).toThrow();
 });
