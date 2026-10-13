@@ -3,10 +3,24 @@ import type { DrawItem } from "./lod";
 import type { ChartCamera } from "./camera";
 import { nodeFill } from "../../shared/colors";
 import { signed } from "../lib/utils";
-import { projectColumn, type ColumnGeometry } from "./columns";
+import type { ColumnGeometry } from "./columns";
 import { fileIcon } from "../lib/file-icons";
 
 const iconPaths = new Map<string, Path2D>();
+const folderShape =
+  "M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2Z";
+const packageShape = "M12 3 21 8v9l-9 5-9-5V8Z M3 8l9 5 9-5 M12 13v9 M7.5 5.5l9 5V15";
+
+function paintFolderIcon(ctx: CanvasRenderingContext2D, packaged: boolean, x: number, y: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(14 / 24, 14 / 24);
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.lineWidth = 1.65;
+  ctx.lineJoin = "round";
+  ctx.stroke(new Path2D(packaged ? packageShape : folderShape));
+  ctx.restore();
+}
 
 function paintFileIcon(ctx: CanvasRenderingContext2D, path: string, x: number, y: number) {
   const icon = fileIcon(path);
@@ -44,9 +58,9 @@ export interface PaintOptions {
 export function itemRect(item: DrawItem, options: PaintOptions) {
   const { camera: t, columns, lineScale: sy } = options;
   return {
-    x: projectColumn(item.y0, columns) * t.kx + t.x,
+    x: item.y0 * columns.scale * t.kx + t.x,
     y: item.x0 * sy * t.ky + t.y,
-    width: (projectColumn(item.y1, columns) - projectColumn(item.y0, columns)) * t.kx,
+    width: (item.y1 - item.y0) * columns.scale * t.kx,
     height: (item.x1 - item.x0) * sy * t.ky,
   };
 }
@@ -94,7 +108,7 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
       ctx.lineWidth = selected ? 2 : 1;
       ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
     }
-    const contextColumn = !item.aggregate && item.nodes[0].depth === 0;
+    const contextColumn = !item.aggregate && (node.kind === "project" || node.kind === "folder");
     if (h < 18 || (w < 65 && !contextColumn)) continue;
     const text = item.aggregate ? `${item.nodes.length} 영역` : node.name;
     const fill = color(String(ctx.fillStyle));
@@ -124,14 +138,21 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
         const nameWidth = ctx.measureText(text).width;
         ctx.font = '10px "SUIT Variable", system-ui, sans-serif';
         const locWidth = ctx.measureText(loc).width;
-        const start = -(nameWidth + 8 + locWidth) / 2;
+        const showLoc = 20 + nameWidth + 8 + locWidth <= h - 16;
+        ctx.font = '500 12px "SUIT Variable", system-ui, sans-serif';
+        let label = text;
+        while (label.length > 1 && ctx.measureText(label).width > h - 36)
+          label = label.slice(0, -2) + "…";
+        const labelWidth = ctx.measureText(label).width;
+        const start = -(20 + labelWidth + (showLoc ? 8 + locWidth : 0)) / 2;
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
         ctx.font = '500 12px "SUIT Variable", system-ui, sans-serif';
-        ctx.fillText(text, start, 0);
+        paintFolderIcon(ctx, !!node.package, start, -7);
+        ctx.fillText(label, start + 20, 0);
         ctx.font = '10px "SUIT Variable", system-ui, sans-serif';
         ctx.fillStyle = foreground === "#fafafa" ? "#d4d4d4" : dark ? "#a3a3a3" : "#737373";
-        ctx.fillText(loc, start + nameWidth + 8, 0);
+        if (showLoc) ctx.fillText(loc, start + 20 + labelWidth + 8, 0);
       }
       ctx.restore();
       continue;

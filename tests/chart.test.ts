@@ -4,12 +4,7 @@ import { buildLayout, reportIndex } from "../src/viewer/chart/layout";
 import { visibleItems } from "../src/viewer/chart/lod";
 import { itemRect } from "../src/viewer/chart/paint";
 import { makeNode } from "../src/analysis/tree";
-import {
-  fitColumns,
-  miniatureColumns,
-  projectColumn,
-  unprojectColumn,
-} from "../src/viewer/chart/columns";
+import { fitColumns, miniatureColumns } from "../src/viewer/chart/columns";
 
 const filters = { changed: false, extension: "", sort: "path" as const };
 
@@ -28,7 +23,7 @@ test("columns taper and stay adjacent without changing LOC; deep columns keep a 
   });
   const layout = buildLayout(new Map(nodes.map((node) => [node.id, node])), nodes[0].id, filters)!;
   const widths = layout.nodes.map((node) => node.y1 - node.y0);
-  expect(widths[0]).toBe(48);
+  expect(widths[0]).toBe(200);
   expect(widths[1]).toBeGreaterThan(widths[2]);
   expect(widths[2]).toBeGreaterThan(widths[3]);
   expect(Math.min(...widths.slice(1))).toBe(120);
@@ -50,9 +45,8 @@ test("focusing a deep file restarts widths at depth zero and keeps source metric
   const original = whole.nodes.find((node) => node.data.node.id === fileId)!;
   const focused = buildLayout(index, fileId, filters)!;
   expect(focused.root.y0).toBe(0);
-  expect(focused.root.y1).toBe(whole.root.y1);
-  expect(focused.root.y1 - focused.root.y0).toBe(48);
-  expect(focused.root.children![0].y1 - focused.root.children![0].y0).toBeGreaterThan(
+  expect(focused.root.y1 - focused.root.y0).toBe(200);
+  expect(focused.root.children![0].y1 - focused.root.children![0].y0).toBe(
     original.children![0].y1 - original.children![0].y0,
   );
   expect(focused.total).toBe(original.data.weight);
@@ -76,27 +70,67 @@ test("painting, hit rectangles and horizontal culling agree after zoom and pan",
   const rect = itemRect(item, {
     width: 800,
     height: 600,
-    columns: { rootWidth: 48, childScale: 1.5, width: 48 + (layout.width - 48) * 1.5 },
+    columns: { positions: new Map(), scale: 1.5, width: layout.width * 1.5 },
     lineScale: 2,
     camera: { x: 37, y: -13, kx: 3, ky: 2 },
     dark: false,
     changes: true,
   });
-  expect(rect.x).toBe((48 + (file.y0 - 48) * 1.5) * 3 + 37);
+  expect(rect.x).toBe(file.y0 * 4.5 + 37);
   expect(rect.width).toBe((file.y1 - file.y0) * 4.5);
   expect(rect.y).toBe(file.x0 * 4 - 13);
 });
 
-test("context column stays thin on wide and leaf-only views; projection and minimap share ratios", () => {
+test("all folders stay thin, mixed siblings meet their own children, and minimap shares ratios", () => {
+  const report = demoReport();
+  const layout = buildLayout(reportIndex(report), report.rootId, filters)!;
   for (const viewport of [300, 900, 1600]) {
-    const columns = fitColumns(848, viewport);
-    expect(projectColumn(48, columns)).toBe(48);
-    expect(projectColumn(248, columns) - projectColumn(48, columns)).toBeGreaterThanOrEqual(200);
+    const columns = fitColumns(layout.root, viewport);
     const mini = miniatureColumns(columns, 126);
-    for (const x of [-20, 0, 24, 48, 200, 848, 1000]) {
-      expect(unprojectColumn(projectColumn(x, columns), columns)).toBeCloseTo(x);
-      expect(projectColumn(x, mini) / 126).toBeCloseTo(projectColumn(x, columns) / columns.width);
+    for (const node of layout.nodes) {
+      const edge = columns.positions.get(node.data.node.id)!;
+      if (node.data.node.kind === "folder" || node.data.node.kind === "project")
+        expect(edge.end - edge.start).toBe(48);
+      else expect(edge.end - edge.start).toBeGreaterThanOrEqual(120);
+      if (node.parent)
+        expect(edge.start).toBe(columns.positions.get(node.parent.data.node.id)!.end);
+      expect((edge.end * mini.scale) / 126).toBeCloseTo(edge.end / columns.width);
     }
   }
-  expect(fitColumns(48, 1600).width).toBe(48);
+  const rootOnly = buildLayout(
+    new Map([[report.rootId, { ...report.nodes[0], children: [] }]]),
+    report.rootId,
+    filters,
+  )!;
+  expect(fitColumns(rootOnly.root, 1600).width).toBe(48);
+});
+
+test("LOD never merges a narrow folder and wide file; positioned culling preserves totals", () => {
+  const report = demoReport();
+  const layout = buildLayout(reportIndex(report), report.rootId, filters)!;
+  const columns = fitColumns(layout.root, 1600);
+  const items = visibleItems(layout.root, {
+    left: 0,
+    right: columns.width,
+    top: 0,
+    bottom: layout.total,
+    pixelsPerLine: 0.001,
+    columns,
+  });
+  const siblings = items.filter((item) => item.nodes[0].parent === layout.root);
+  expect(siblings.reduce((sum, item) => sum + item.x1 - item.x0, 0)).toBeCloseTo(layout.total);
+  for (const item of siblings) {
+    for (const node of item.nodes)
+      expect(columns.positions.get(node.data.node.id)!.end).toBe(item.y1);
+  }
+  const culled = visibleItems(layout.root, {
+    left: 200,
+    right: 500,
+    top: 0,
+    bottom: layout.total,
+    pixelsPerLine: 10,
+    columns,
+  });
+  expect(culled.length).toBeGreaterThan(0);
+  expect(culled.every((item) => item.y1 >= 200 && item.y0 <= 500)).toBe(true);
 });

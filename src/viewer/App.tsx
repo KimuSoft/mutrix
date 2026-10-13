@@ -22,6 +22,7 @@ import { Explorer } from "./components/Explorer";
 import { Inspector } from "./components/Inspector";
 import { DiagnosticsDialog } from "./components/DiagnosticsDialog";
 import { Button } from "./components/ui/button";
+import { editorUri } from "./lib/node-links";
 
 interface ViewSnapshot {
   focus: string;
@@ -92,6 +93,19 @@ export function App({ initialReport }: { initialReport: Report }) {
     setHistory(history.slice(0, -1));
   };
   const toggleFocusNode = (id: string) => {
+    const target = index.get(id)!;
+    if (target.kind === "file") {
+      const uri = editorUri(report.meta.rootPath, target);
+      if (uri) {
+        const link = document.createElement("a");
+        link.href = uri;
+        link.hidden = true;
+        document.body.append(link);
+        link.click();
+        link.remove();
+      } else setNotice("삭제된 파일은 열 수 없습니다.");
+      return;
+    }
     if (id === focus && history.length) goBack();
     else focusNode(id);
   };

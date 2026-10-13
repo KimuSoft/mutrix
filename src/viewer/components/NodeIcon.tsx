@@ -5,11 +5,11 @@ import {
   FileJson2,
   FileText,
   Folder,
-  Layers3,
   Hash,
   Image,
   Palette,
   Terminal,
+  Package,
 } from "lucide-react";
 import type { ReportNode } from "../../shared/types";
 import { fileIcon } from "../lib/file-icons";
@@ -30,7 +30,8 @@ export function NodeIcon({ node, size = 14 }: { node: ReportNode; size?: number 
       </svg>
     );
   let Icon = File;
-  if (node.kind === "project") Icon = Layers3;
+  if (node.package) Icon = Package;
+  else if (node.kind === "project") Icon = Folder;
   else if (node.kind === "folder") Icon = Folder;
   else if (node.kind === "scope") Icon = Braces;
   else if (node.kind === "residual") Icon = Hash;
@@ -40,5 +41,12 @@ export function NodeIcon({ node, size = 14 }: { node: ReportNode; size?: number 
   else if (/\.(md|txt|rst)$/.test(node.path)) Icon = FileText;
   else if (/\.(svg|png|jpg)$/.test(node.path)) Icon = Image;
   else if (/\.(sh|ps1|bat)$/.test(node.path)) Icon = Terminal;
-  return <Icon size={size} strokeWidth={1.65} aria-hidden="true" />;
+  return (
+    <Icon
+      size={size}
+      strokeWidth={1.65}
+      aria-hidden="true"
+      data-node-icon={node.package ? "package" : node.kind}
+    />
+  );
 }

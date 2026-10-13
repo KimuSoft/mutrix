@@ -9,7 +9,7 @@ export function ChartHelp() {
         <dt>클릭</dt>
         <dd>노드 상세 보기</dd>
         <dt>더블클릭</dt>
-        <dd>하위 영역 보기 · 같은 영역은 뒤로가기</dd>
+        <dd>폴더·심볼 영역 보기 · 파일은 VS Code로 열기</dd>
         <dt>드래그</dt>
         <dd>이동</dd>
         <dt>스크롤 / 핀치</dt>

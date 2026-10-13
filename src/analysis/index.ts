@@ -12,6 +12,7 @@ import {
 } from "./files";
 import { analyzeFile } from "./scopes";
 import { ReportTree } from "./tree";
+import { packageInfo } from "./packages";
 import type { AnalyzeOptions, Report } from "../shared/types";
 
 export async function analyze(options: AnalyzeOptions): Promise<Report> {
@@ -49,6 +50,15 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
       const after = afterText === undefined ? undefined : analyzeFile(path, afterText);
       context.diagnostics.push(...(before?.diagnostics ?? []), ...(after?.diagnostics ?? []));
       tree.addFile(path, before, after);
+      if (path.split("/").at(-1) === "package.json") {
+        const parentId = tree.nodes.get(`file:${path}`)!.parentId!;
+        tree.nodes.get(parentId)!.package = packageInfo(
+          path,
+          beforeText,
+          afterText,
+          context.diagnostics,
+        );
+      }
       files++;
     }
     await objects?.close();
