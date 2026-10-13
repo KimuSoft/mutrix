@@ -3,12 +3,15 @@ import { ChevronDown, ChevronRight, Search, SlidersHorizontal } from "lucide-rea
 import type { ReportNode } from "../../shared/types";
 import type { Filters } from "../chart/layout";
 import { NodeIcon } from "./NodeIcon";
+import { NodeBadge } from "./NodeBadge";
+import { NodeInfo } from "./NodeInfo";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
-import { format, signed } from "../lib/utils";
+import { format } from "../lib/utils";
 
 interface Props {
+  warnLoc: number;
   nodes: ReportNode[];
   index: Map<string, ReportNode>;
   rootId: string;
@@ -20,6 +23,7 @@ interface Props {
   onFilters: (filters: Filters) => void;
 }
 export function Explorer({
+  warnLoc,
   nodes,
   index,
   rootId,
@@ -157,10 +161,13 @@ export function Explorer({
                 >
                   <NodeIcon node={node} />
                   <span>
-                    <strong>{node.name}</strong>
+                    <strong>
+                      {node.name}
+                      <NodeBadge node={node} changes={changes} warnLoc={warnLoc} />
+                      <NodeInfo node={node} />
+                    </strong>
                     <small>{node.path}</small>
                   </span>
-                  <em className={`delta ${node.status}`}>{signed(node.delta)}</em>
                 </button>
               ))}
             </>
@@ -218,7 +225,9 @@ export function Explorer({
                   >
                     <NodeIcon node={node} />
                     <span>{node.name}</span>
-                    {changes && node.status !== "unchanged" && (
+                    <NodeBadge node={node} changes={changes} warnLoc={warnLoc} />
+                    <NodeInfo node={node} />
+                    {changes && node.status === "modified" && node.delta === 0 && (
                       <i className={`change-dot ${node.status}`} />
                     )}
                   </button>

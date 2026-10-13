@@ -97,6 +97,16 @@ try {
   const openedLinks: string[] = [];
   await page.exposeFunction("recordEditorLink", (uri: string) => openedLinks.push(uri));
   await page.addInitScript(() => {
+    const original = CanvasRenderingContext2D.prototype.fillText;
+    const drawn: string[] = [];
+    (window as unknown as { __mutrixCanvasText: string[] }).__mutrixCanvasText = drawn;
+    CanvasRenderingContext2D.prototype.fillText = function (text, x, y, maxWidth) {
+      if (this.canvas.parentElement?.classList.contains("matrix-host")) {
+        drawn.push(text);
+        if (drawn.length > 2000) drawn.shift();
+      }
+      original.call(this, text, x, y, maxWidth);
+    };
     document.addEventListener(
       "click",
       (event) => {
@@ -122,6 +132,15 @@ try {
     await page.locator('.tree-node svg[data-node-icon="package"]').count(),
     "Package root icon missing in tree",
   );
+  await page.waitForFunction(() => {
+    const drawn = (window as unknown as { __mutrixCanvasText: string[] }).__mutrixCanvasText;
+    return (
+      drawn.includes("NEW") &&
+      drawn.includes("DEL") &&
+      drawn.includes("+176") &&
+      drawn.includes("−228")
+    );
+  });
   await verifyScrollArea(page);
   const controlStyle = await page.locator(".chart-controls").evaluate((element) => ({
     height: element.getBoundingClientRect().height,
@@ -173,6 +192,66 @@ try {
     "Paths, IDs and chart controls must use SUIT",
   );
   await verifyAxisNavigation(page, artifacts);
+  await page
+    .getByRole("textbox", { name: "Search paths and symbols" })
+    .fill("file:src/editor/selection.ts");
+  assert(
+    (await page.locator(".search-result .node-badge").allTextContents()).join(" ") === "NEW",
+    "Default WARN must not mark a 286 LOC file",
+  );
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  const settingsCamera = await camera();
+  await page.getByRole("button", { name: "표시 설정", exact: true }).click();
+  const warnInput = page.getByRole("spinbutton", { name: "WARN 기준 LOC", exact: true });
+  await page.evaluate(() => {
+    (window as unknown as { __mutrixCanvasText: string[] }).__mutrixCanvasText.length = 0;
+  });
+  await warnInput.fill("200");
+  await warnInput.press("Enter");
+  await page.waitForFunction(
+    () => document.querySelector(".search-result .node-badge.warning")?.textContent === "WARN",
+  );
+  assert(
+    (await page.locator(".search-result .node-badge").allTextContents()).join(" ") === "NEW WARN",
+    "NEW and WARN must coexist",
+  );
+  const warningColor = await page
+    .locator(".search-result .node-badge.warning")
+    .evaluate((element) => ({
+      background: getComputedStyle(element).backgroundColor,
+      foreground: getComputedStyle(element).color,
+    }));
+  assert(
+    warningColor.background === "rgb(253, 224, 71)" && warningColor.foreground === "rgb(66, 32, 6)",
+    "WARN must have a yellow background with dark readable text",
+  );
+  await page.getByRole("button", { name: "Toggle theme", exact: true }).click();
+  assert(
+    (await page
+      .locator(".search-result .node-badge.warning")
+      .evaluate((element) => getComputedStyle(element).backgroundColor)) === "rgb(250, 204, 21)",
+    "Dark theme WARN must remain yellow",
+  );
+  await page.getByRole("button", { name: "Toggle theme", exact: true }).click();
+  await page.getByRole("button", { name: "표시 설정", exact: true }).click();
+  await assertCamera(settingsCamera);
+  await page.waitForFunction(() =>
+    (window as unknown as { __mutrixCanvasText: string[] }).__mutrixCanvasText.includes("WARN"),
+  );
+  await warnInput.fill("0");
+  await warnInput.press("Enter");
+  assert(
+    (await warnInput.inputValue()) === "200",
+    "Invalid threshold should restore the applied value",
+  );
+  await page.getByRole("button", { name: "초기화", exact: true }).click();
+  assert(
+    (await page.locator(".search-result .node-badge.warning").count()) === 0,
+    "Reset should restore the default threshold",
+  );
+  await page.keyboard.press("Escape");
+  await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("");
+  await page.getByRole("button", { name: "Reset view", exact: true }).click();
   // Exercise actual canvas hit-testing with tapered columns, not just tree navigation.
   const initialCanvas = page.locator(".matrix-host > canvas");
   const initialBox = await initialCanvas.boundingBox();
@@ -282,7 +361,7 @@ try {
     "Canvas file activation changed chart focus",
   );
   // SVG silhouettes must match in tree/search, Inspector, and the offline Canvas.
-  for (const path of ["src/ui/Editor.tsx", "src/editor/commands.ts"]) {
+  for (const path of ["src/ui/Editor.tsx", "src/editor/commands.ts", "tests/editor.test.ts"]) {
     const expected = fileIcon(path)!;
     await page.getByRole("textbox", { name: "Search paths and symbols" }).fill(`file:${path}`);
     const result = page.locator(".search-result").first();
@@ -326,7 +405,13 @@ try {
         );
         ctx.scale((ratio * 14) / 24, (ratio * 14) / 24);
         ctx.fillStyle = "#171717";
-        ctx.fill(new Path2D(icon.path));
+        if (icon.stroke) {
+          ctx.strokeStyle = "#171717";
+          ctx.lineWidth = 1.65;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.stroke(new Path2D(icon.path));
+        } else ctx.fill(new Path2D(icon.path));
         const expected = ctx.getImageData(0, 0, reference.width, reference.height).data;
         const actual = source
           .getContext("2d")!
@@ -351,6 +436,7 @@ try {
       },
       {
         path: expected.path,
+        stroke: !!expected.stroke,
         background: nodeFill(node.data.node, true, false),
         x: columns.positions.get(node.data.node.id)!.start + 12,
         y: baseline - 12,
@@ -364,10 +450,20 @@ try {
   await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("undo");
   await page.locator(".search-result").first().click();
   assert((await page.locator(".inspector h2").textContent()) === "undo", "Search selection failed");
+  await page.getByRole("button", { name: "영역 확대", exact: true }).click();
+  await chartReady();
+  await page.waitForFunction(() => {
+    const drawn = (window as unknown as { __mutrixCanvasText: string[] }).__mutrixCanvasText;
+    return (
+      drawn.some((text) => text.includes("Undo 경계")) &&
+      drawn.some((text) => text.includes("@returns 복원한 문서"))
+    );
+  });
   assert(
-    (await page.locator(".summary-text").textContent())?.includes("Undo"),
-    "Existing Summary missing",
+    (await page.locator(".inspector .summary-text, .inspector .documentation-text").count()) === 0,
+    "Descriptions should be on chart nodes",
   );
+  await page.screenshot({ path: `${artifacts}/mutrix-node-description.png`, fullPage: true });
   const injection = "</script><img src=x onerror=alert(1)> · 테스트 & 설명";
   await page.locator('input[type="file"]').setInputFiles({
     name: "summaries.json",
@@ -383,11 +479,24 @@ try {
       }),
     ),
   });
-  await page.waitForFunction(
-    (text) => document.querySelector(".summary-text")?.textContent === text,
-    injection,
+  await page.waitForFunction(() =>
+    (window as unknown as { __mutrixCanvasText: string[] }).__mutrixCanvasText.some((text) =>
+      text.includes("</script><img"),
+    ),
+  );
+  const descriptionBox = (await initialCanvas.boundingBox())!;
+  await page.mouse.move(descriptionBox.x + 24, descriptionBox.y + descriptionBox.height * 0.4);
+  await page.locator(".tooltip-summary").waitFor();
+  assert(
+    (await page.locator(".tooltip-summary").textContent()) === `변경: ${injection}`,
+    "Loaded Summary did not reach the node tooltip",
   );
   assert((await page.locator("img").count()) === 0, "Summary markup executed");
+  assert(
+    (await page.locator(".tooltip-documentation").textContent())?.includes("@returns"),
+    "Loading a Summary must preserve source documentation",
+  );
+  await page.getByRole("button", { name: "Go back", exact: true }).click();
   await page.getByRole("textbox", { name: "Search paths and symbols" }).fill("");
   await page.getByRole("combobox", { name: "File type filter" }).selectOption(".tsx");
   assert(

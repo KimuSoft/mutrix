@@ -58,7 +58,7 @@ export async function verifyScrollArea(page: Page) {
   await page.keyboard.press("Enter");
   assert(
     (await page.locator(".inspector h2").textContent()) ===
-      (await first.locator("strong").textContent()),
+      (await first.locator("strong").evaluate((element) => element.firstChild?.textContent)),
     "Keyboard selection stopped working inside ScrollArea",
   );
   await search.fill("");

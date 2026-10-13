@@ -5,7 +5,6 @@ import {
   ExternalLink,
   Focus,
   ArrowLeftRight,
-  MessageSquareText,
 } from "lucide-react";
 import type { ReportNode } from "../../shared/types";
 import { percentLabel } from "../../shared/colors";
@@ -13,8 +12,10 @@ import { NodeIcon } from "./NodeIcon";
 import { Button } from "./ui/button";
 import { format, signed, copy } from "../lib/utils";
 import { editorUri } from "../lib/node-links";
+import { NodeBadge } from "./NodeBadge";
 
 export function Inspector({
+  warnLoc,
   node,
   rootPath,
   changes,
@@ -22,6 +23,7 @@ export function Inspector({
   onSelect,
   notify,
 }: {
+  warnLoc: number;
   node: ReportNode;
   rootPath: string;
   changes: boolean;
@@ -35,6 +37,11 @@ export function Inspector({
   );
   const range = node.afterRange ?? node.beforeRange;
   const uri = editorUri(rootPath, node);
+  const statusCaption = changes
+    ? node.status === "added" || node.status === "deleted"
+      ? undefined
+      : node.status
+    : node.kind;
   const doCopy = async (value: string, message: string) => {
     try {
       await copy(value);
@@ -47,7 +54,10 @@ export function Inspector({
     <aside className="inspector">
       <div className="panel-heading">
         <span>INSPECTOR</span>
-        <span className={`status-label ${node.status}`}>{changes ? node.status : node.kind}</span>
+        <span className="inspector-status">
+          {statusCaption && <span className={`status-label ${node.status}`}>{statusCaption}</span>}
+          <NodeBadge node={node} changes={changes} warnLoc={warnLoc} />
+        </span>
       </div>
       <div className="inspector-title">
         <div className="node-symbol">
@@ -154,20 +164,6 @@ export function Inspector({
           </button>
         </section>
       )}
-      <section className="inspector-section summary-section">
-        <h3>
-          <MessageSquareText size={13} /> CHANGE SUMMARY
-        </h3>
-        {node.summary ? (
-          <p className="summary-text">{node.summary}</p>
-        ) : (
-          <p className="microcopy">
-            아직 설명이 없습니다.
-            <br />
-            Summary JSON을 불러오면 이 영역에 표시됩니다.
-          </p>
-        )}
-      </section>
       <section className="inspector-section">
         <h3>
           NODE ID

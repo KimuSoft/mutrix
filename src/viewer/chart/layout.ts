@@ -73,7 +73,7 @@ export function buildLayout(
   const root = partition<LayoutData>().size([data.weight || 1, columns])(tree);
   const geometry = fitColumns(root, 0);
   const nodes = root.descendants();
-  // Partition depths are relative to the focused root, so drilling in restarts the taper.
+  // Horizontal sizes depend on kind; Partition retains the vertical LOC layout.
   for (const node of nodes) {
     const position = geometry.positions.get(node.data.node.id)!;
     node.y0 = position.start;

@@ -107,6 +107,10 @@ export function demoReport(): Report {
   neutral.removed = 18;
   neutral.summary =
     "Undo 경계를 명시적으로 분리했습니다. 전체 줄 수는 같지만 내부 처리 순서가 바뀌었습니다.";
+  neutral.documentation = {
+    before: "직전 트랜잭션을 되돌립니다.",
+    after: "직전 트랜잭션을 되돌립니다.\n@returns 복원한 문서",
+  };
   map.get("file:src/editor/document.ts")!.summary =
     "문서 정규화 처리를 작은 함수로 분리하고 중복 변환을 제거했습니다.";
   map.get("file:src/editor/selection.ts")!.summary =

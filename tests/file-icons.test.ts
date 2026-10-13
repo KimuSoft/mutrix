@@ -29,3 +29,11 @@ test("Common text formats have SVG paths and unknown files keep the fallback", (
   for (const path of ["LICENSE", "notes.txt", "unknown.xyz", "src.ts/README", ".gitignore"])
     expect(fileIcon(path)).toBeUndefined();
 });
+
+test("test.ts suffix takes priority over the TypeScript logo, using only the file name", () => {
+  for (const path of ["tests/parser.test.ts", "C:\\app\\Parser.TEST.TS"])
+    expect(fileIcon(path)?.slug).toBe("test");
+  expect(fileIcon("parser.test.ts")?.stroke).toBe(true);
+  for (const path of ["src/parser.ts", "src/types.d.ts", "parser.test.ts/utils.ts"])
+    expect(fileIcon(path)?.slug).toBe("typescript");
+});
