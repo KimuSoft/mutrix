@@ -8,7 +8,7 @@ import { fitColumns, miniatureColumns } from "../src/viewer/chart/columns";
 
 const filters = { changed: false, extension: "", sort: "path" as const };
 
-test("columns taper and stay adjacent without changing LOC; deep columns keep a minimum width", () => {
+test("symbol widths stay constant at every depth without changing LOC or adjacency", () => {
   const nodes = Array.from({ length: 9 }, (_, depth) => {
     const node = makeNode(
       `depth:${depth}`,
@@ -23,11 +23,7 @@ test("columns taper and stay adjacent without changing LOC; deep columns keep a 
   });
   const layout = buildLayout(new Map(nodes.map((node) => [node.id, node])), nodes[0].id, filters)!;
   const widths = layout.nodes.map((node) => node.y1 - node.y0);
-  expect(widths[0]).toBe(200);
-  expect(widths[1]).toBeGreaterThan(widths[2]);
-  expect(widths[2]).toBeGreaterThan(widths[3]);
-  expect(Math.min(...widths.slice(1))).toBe(120);
-  expect(widths.at(-1)).toBe(widths.at(-2));
+  expect(widths.every((width) => width === 100)).toBe(true);
   for (const node of layout.nodes) {
     expect(node.x1 - node.x0).toBe(10);
     if (node.parent) expect(node.y0).toBe(node.parent.y1);
@@ -36,7 +32,7 @@ test("columns taper and stay adjacent without changing LOC; deep columns keep a 
   expect(layout.total).toBe(10);
 });
 
-test("focusing a deep file restarts widths at depth zero and keeps source metrics intact", () => {
+test("focusing a file preserves type widths and source metrics", () => {
   const report = demoReport(),
     index = reportIndex(report);
   const before = JSON.stringify(report);
@@ -91,7 +87,13 @@ test("all folders stay thin, mixed siblings meet their own children, and minimap
       const edge = columns.positions.get(node.data.node.id)!;
       if (node.data.node.kind === "folder" || node.data.node.kind === "project")
         expect(edge.end - edge.start).toBe(48);
-      else expect(edge.end - edge.start).toBeGreaterThanOrEqual(120);
+      else expect(edge.end - edge.start).toBeGreaterThanOrEqual(100);
+      if (node.data.node.kind === "file" && node.children?.length) {
+        for (const child of node.children) {
+          const childEdge = columns.positions.get(child.data.node.id)!;
+          expect(childEdge.end - childEdge.start).toBeCloseTo((edge.end - edge.start) / 2);
+        }
+      }
       if (node.parent)
         expect(edge.start).toBe(columns.positions.get(node.parent.data.node.id)!.end);
       expect((edge.end * mini.scale) / 126).toBeCloseTo(edge.end / columns.width);

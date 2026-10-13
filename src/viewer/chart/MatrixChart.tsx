@@ -9,6 +9,8 @@ import { format, signed } from "../lib/utils";
 import { fitColumns, miniatureColumns } from "./columns";
 import { ChartHelp } from "../components/ChartHelp";
 import { ZoomControls } from "../components/ZoomControls";
+import { NodeBadge } from "../components/NodeBadge";
+import { DisplaySettings } from "../components/DisplaySettings";
 import {
   constrainCamera,
   fitBand,
@@ -20,6 +22,8 @@ import {
 import { bindNavigation } from "./navigation";
 
 interface Props {
+  warnLoc: number;
+  onWarnLoc: (value: number) => void;
   layout?: ChartLayout;
   dark: boolean;
   changes: boolean;
@@ -30,6 +34,8 @@ interface Props {
   onCameraChange: (camera: ChartCamera) => void;
 }
 export function MatrixChart({
+  warnLoc,
+  onWarnLoc,
   layout,
   dark,
   changes,
@@ -95,6 +101,7 @@ export function MatrixChart({
         camera,
         dark,
         changes,
+        warnLoc,
         selected: actions.current.selected,
         hovered: hovering,
       };
@@ -161,6 +168,7 @@ export function MatrixChart({
         camera: identityCamera(),
         dark,
         changes,
+        warnLoc,
       });
       const view = visibleWorld(camera, width, height);
       const x = Math.max(0, view.left / columns.width) * mw;
@@ -226,7 +234,10 @@ export function MatrixChart({
           node,
           count: item!.aggregate ? item!.nodes.length : 1,
           x: Math.min(event.clientX - rect.left + 14, width - 250),
-          y: Math.min(event.clientY - rect.top + 14, height - 95),
+          y: Math.min(
+            event.clientY - rect.top + 14,
+            height - (node.documentation || node.summary ? 210 : 95),
+          ),
         });
       } else setTooltip(undefined);
       element.style.cursor = item ? "pointer" : "grab";
@@ -276,7 +287,7 @@ export function MatrixChart({
       element.removeEventListener("mouseleave", leave);
       api.current = null;
     };
-  }, [layout, dark, changes, initialCamera]);
+  }, [layout, dark, changes, initialCamera, warnLoc]);
   useEffect(() => {
     // Redraw selection without rebuilding the layout or resetting the camera.
     if (canvas.current) canvas.current.dispatchEvent(new MouseEvent("mouseleave"));
@@ -308,6 +319,9 @@ export function MatrixChart({
           >
             <strong>
               {tooltip.count > 1 ? `${tooltip.count}개 영역 · 확대하여 보기` : tooltip.node.name}
+              {tooltip.count === 1 && (
+                <NodeBadge node={tooltip.node} changes={changes} warnLoc={warnLoc} />
+              )}
             </strong>
             <span>
               {tooltip.count > 1
@@ -320,6 +334,16 @@ export function MatrixChart({
                 {changes &&
                   `· ${signed(tooltip.node.delta)} · +${tooltip.node.added} / −${tooltip.node.removed}`}
               </span>
+            )}
+            {tooltip.count === 1 && tooltip.node.summary && (
+              <p className="tooltip-summary">변경: {tooltip.node.summary}</p>
+            )}
+            {tooltip.count === 1 && (
+              <p className="tooltip-documentation">
+                {tooltip.node.status === "deleted"
+                  ? tooltip.node.documentation?.before
+                  : tooltip.node.documentation?.after}
+              </p>
             )}
           </div>
         )}
@@ -369,6 +393,7 @@ export function MatrixChart({
           <Scan />
         </Button>
         <ChartHelp />
+        <DisplaySettings warnLoc={warnLoc} onWarnLoc={onWarnLoc} />
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ export interface ScopeInfo {
   end: number;
   ownLoc: number;
   ownText: string;
+  jsDoc?: string;
 }
 export interface FileAnalysis {
   text: string;
@@ -54,6 +55,48 @@ function scopeName(node: Node): string {
 }
 
 const sourceExtensions = /\.(?:[cm]?[jt]s|[jt]sx)$/i;
+
+/** Read attached JSDoc only; a containing function's docs never belong to its callbacks. */
+function scopeDocumentation(node: Node): string | undefined {
+  const read = (owner: Node) => {
+    const docs = Node.isJSDocable(owner)
+      ? owner.getJsDocs().map((doc) => doc.getInnerText())
+      : owner
+          .getLeadingCommentRanges()
+          .map((comment) => comment.getText())
+          .filter((text) => text.startsWith("/**"))
+          .map((text) =>
+            text
+              .slice(3, -2)
+              .split(/\r?\n/)
+              .map((line) => line.replace(/^\s*\* ?/, ""))
+              .join("\n"),
+          );
+    return (
+      docs
+        .map((doc) => doc.trim())
+        .filter(Boolean)
+        .join("\n\n") || undefined
+    );
+  };
+  const direct = read(node);
+  if (direct) return direct;
+  let owner = node;
+  const parent = node.getParent();
+  if (
+    parent &&
+    (Node.isPropertyDeclaration(parent) ||
+      Node.isPropertyAssignment(parent) ||
+      Node.isVariableDeclaration(parent))
+  ) {
+    owner = parent;
+    if (Node.isVariableDeclaration(parent)) {
+      const statement = parent.getVariableStatement();
+      if (statement?.getDeclarations().length === 1) owner = statement;
+    }
+  }
+  return owner === node ? undefined : read(owner);
+}
 
 export function analyzeFile(path: string, text: string): FileAnalysis {
   const lines = physicalLines(text);
@@ -116,6 +159,7 @@ export function analyzeFile(path: string, text: string): FileAnalysis {
           range: { startLine, endLine },
           ownLoc: 0,
           ownText: "",
+          jsDoc: scopeDocumentation(node),
         });
         // Preorder traversal ensures earlier source positions win equal-depth ties.
         for (let line = startLine - 1; line < Math.min(endLine, lines.length); line++) {

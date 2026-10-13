@@ -73,6 +73,9 @@ export class ReportTree {
       node.symbolKind = scope.kind;
       node.beforeRange = oldScopes.get(key)?.range;
       node.afterRange = newScopes.get(key)?.range;
+      const beforeDoc = oldScopes.get(key)?.jsDoc;
+      const afterDoc = newScopes.get(key)?.jsDoc;
+      if (beforeDoc || afterDoc) node.documentation = { before: beforeDoc, after: afterDoc };
     }
     const ownerId = (owner: string | null) => (owner ? `scope:${path}#${owner}` : file.id);
     for (const analysis of [before, after]) {
@@ -104,7 +107,12 @@ export class ReportTree {
       for (const [key] of scopes) {
         const oldScope = oldScopes.get(key);
         const newScope = newScopes.get(key);
-        if (!oldScope || !newScope || oldScope.ownText !== newScope.ownText) {
+        if (
+          !oldScope ||
+          !newScope ||
+          oldScope.ownText !== newScope.ownText ||
+          oldScope.jsDoc !== newScope.jsDoc
+        ) {
           this.changed.add(ownerId(key));
           ownChanged.add(ownerId(key));
         }

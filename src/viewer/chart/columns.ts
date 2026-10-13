@@ -1,6 +1,8 @@
 import type { LayoutNode } from "./layout";
 
 export const FOLDER_COLUMN_WIDTH = 48;
+export const FILE_COLUMN_WIDTH = 200;
+export const SYMBOL_COLUMN_WIDTH = FILE_COLUMN_WIDTH / 2;
 export interface ColumnGeometry {
   positions: Map<string, { start: number; end: number }>;
   scale: number;
@@ -11,17 +13,20 @@ export interface ColumnGeometry {
 export function fitColumns(root: LayoutNode, viewportWidth: number): ColumnGeometry {
   const spans = new Map<
     LayoutNode,
-    { fixed: number; flexible: number; level: number; width: number; folder: boolean }
+    { fixed: number; flexible: number; width: number; folder: boolean }
   >();
   let stretch = Infinity;
   root.eachBefore((node) => {
     const parent = node.parent ? spans.get(node.parent)! : undefined;
     const fixed = parent ? parent.fixed + (parent.folder ? parent.width : 0) : 0;
     const flexible = parent ? parent.flexible + (parent.folder ? 0 : parent.width) : 0;
-    const level = parent ? parent.level + (parent.folder ? 0 : 1) : 0;
     const folder = node.data.node.kind === "project" || node.data.node.kind === "folder";
-    const width = folder ? FOLDER_COLUMN_WIDTH : Math.max(120, 200 - level * 20);
-    spans.set(node, { fixed, flexible, level, width, folder });
+    const width = folder
+      ? FOLDER_COLUMN_WIDTH
+      : node.data.node.kind === "file"
+        ? FILE_COLUMN_WIDTH
+        : SYMBOL_COLUMN_WIDTH;
+    spans.set(node, { fixed, flexible, width, folder });
     const endFixed = fixed + (folder ? width : 0);
     const endFlexible = flexible + (folder ? 0 : width);
     if (endFlexible) stretch = Math.min(stretch, (viewportWidth - endFixed) / endFlexible);

@@ -2,9 +2,72 @@ import { color } from "d3-color";
 import type { DrawItem } from "./lod";
 import type { ChartCamera } from "./camera";
 import { nodeFill } from "../../shared/colors";
-import { signed } from "../lib/utils";
 import type { ColumnGeometry } from "./columns";
 import { fileIcon } from "../lib/file-icons";
+import { fitText, wrapText, nodeBadges, folderHasDescription, type NodeBadgeLabel } from "./labels";
+
+function badgesWidth(ctx: CanvasRenderingContext2D, labels: NodeBadgeLabel[]): number {
+  ctx.save();
+  ctx.font = '600 9px "SUIT Variable", system-ui, sans-serif';
+  const width = labels.reduce((sum, label) => sum + ctx.measureText(label).width + 12, 0);
+  ctx.restore();
+  return labels.length ? width - 4 : 0;
+}
+
+function paintBadges(
+  ctx: CanvasRenderingContext2D,
+  labels: NodeBadgeLabel[],
+  x: number,
+  y: number,
+  dark: boolean,
+) {
+  for (const label of labels) x += paintBadge(ctx, label, x, y, dark) + 4;
+}
+
+function paintInfo(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(6, 6, 5, 0, Math.PI * 2);
+  ctx.moveTo(6, 6);
+  ctx.lineTo(6, 9);
+  ctx.stroke();
+  ctx.fillRect(5.5, 3, 1, 1);
+  ctx.restore();
+}
+
+function paintBadge(
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  x: number,
+  y: number,
+  dark: boolean,
+) {
+  ctx.save();
+  ctx.font = '600 9px "SUIT Variable", system-ui, sans-serif';
+  const width = ctx.measureText(label).width + 8;
+  const warning = label === "WARN";
+  if (warning) {
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = dark ? "#facc15" : "#fde047";
+  } else ctx.globalAlpha *= 0.14;
+  ctx.beginPath();
+  ctx.roundRect(x, y - 11, width, 15, 3);
+  ctx.fill();
+  if (warning) {
+    ctx.strokeStyle = dark ? "#ca8a04" : "#eab308";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = "#422006";
+  } else ctx.globalAlpha /= 0.14;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(label, x + 4, y);
+  ctx.restore();
+  return width;
+}
 
 const iconPaths = new Map<string, Path2D>();
 const folderShape =
@@ -33,7 +96,13 @@ function paintFileIcon(ctx: CanvasRenderingContext2D, path: string, x: number, y
       shape = new Path2D(icon.path);
       iconPaths.set(icon.slug, shape);
     }
-    ctx.fill(shape);
+    if (icon.stroke) {
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.lineWidth = 1.65;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke(shape);
+    } else ctx.fill(shape);
   } else {
     // Plain document fallback, matching Lucide's File outline in the tree.
     ctx.strokeStyle = ctx.fillStyle;
@@ -52,6 +121,7 @@ export interface PaintOptions {
   camera: ChartCamera;
   dark: boolean;
   changes: boolean;
+  warnLoc?: number;
   selected?: string;
   hovered?: string;
 }
@@ -111,6 +181,16 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
     const contextColumn = !item.aggregate && (node.kind === "project" || node.kind === "folder");
     if (h < 18 || (w < 65 && !contextColumn)) continue;
     const text = item.aggregate ? `${item.nodes.length} 영역` : node.name;
+    const data = item.nodes[0].data;
+    const badges = !item.aggregate
+      ? nodeBadges(node, changes, options.warnLoc, data.afterLoc - data.beforeLoc)
+      : [];
+    const info = !item.aggregate && folderHasDescription(node);
+    const documentation =
+      node.status === "deleted" ? node.documentation?.before : node.documentation?.after;
+    const description = !item.aggregate
+      ? [node.summary && `변경: ${node.summary}`, documentation].filter(Boolean).join("\n")
+      : "";
     const fill = color(String(ctx.fillStyle));
     const rgb = fill?.rgb();
     const luminance = rgb ? rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114 : 160;
@@ -131,28 +211,30 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
       if (w >= 20 && h >= 60) {
         ctx.translate(x + w / 2, y + h / 2);
         ctx.rotate(-Math.PI / 2);
-        const current = item.nodes[0].data.afterLoc.toLocaleString();
-        const loc = changes
-          ? `${item.nodes[0].data.beforeLoc.toLocaleString()} → ${current} LOC`
-          : `${current} LOC`;
+        const current = data.afterLoc.toLocaleString();
+        const loc = changes ? "" : `${current} LOC`;
         const nameWidth = ctx.measureText(text).width;
+        const folderBadges = h >= 110 ? badges : [];
+        const badgeSpace = folderBadges.length ? badgesWidth(ctx, folderBadges) + 6 : 0;
+        const infoSpace = info ? 18 : 0;
         ctx.font = '10px "SUIT Variable", system-ui, sans-serif';
         const locWidth = ctx.measureText(loc).width;
-        const showLoc = 20 + nameWidth + 8 + locWidth <= h - 16;
+        const showLoc = !!loc && 20 + nameWidth + badgeSpace + infoSpace + 8 + locWidth <= h - 16;
         ctx.font = '500 12px "SUIT Variable", system-ui, sans-serif';
-        let label = text;
-        while (label.length > 1 && ctx.measureText(label).width > h - 36)
-          label = label.slice(0, -2) + "…";
+        const label = fitText(ctx, text, h - 36 - badgeSpace - infoSpace);
         const labelWidth = ctx.measureText(label).width;
-        const start = -(20 + labelWidth + (showLoc ? 8 + locWidth : 0)) / 2;
+        const start =
+          -(20 + labelWidth + badgeSpace + infoSpace + (showLoc ? 8 + locWidth : 0)) / 2;
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
         ctx.font = '500 12px "SUIT Variable", system-ui, sans-serif';
         paintFolderIcon(ctx, !!node.package, start, -7);
         ctx.fillText(label, start + 20, 0);
+        paintBadges(ctx, folderBadges, start + 20 + labelWidth + 6, 3, dark);
+        if (info) paintInfo(ctx, start + 20 + labelWidth + badgeSpace + 4, -6);
         ctx.font = '10px "SUIT Variable", system-ui, sans-serif';
         ctx.fillStyle = foreground === "#fafafa" ? "#d4d4d4" : dark ? "#a3a3a3" : "#737373";
-        if (showLoc) ctx.fillText(loc, start + 20 + labelWidth + 8, 0);
+        if (showLoc) ctx.fillText(loc, start + 20 + labelWidth + badgeSpace + infoSpace + 8, 0);
       }
       ctx.restore();
       continue;
@@ -166,20 +248,34 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
           : node.kind === "project"
             ? "▥"
             : "·";
+    const labelX = x + (!item.aggregate && node.kind === "file" ? 30 : 10);
+    const labelText = !item.aggregate && node.kind !== "file" ? `${icon}  ${text}` : text;
+    const badgeWidth = badgesWidth(ctx, badges);
+    const horizontalBadges = w >= badgeWidth + 80 ? badges : [];
+    const label = fitText(
+      ctx,
+      labelText,
+      right - labelX - (horizontalBadges.length ? badgeWidth + 15 : 10),
+    );
     if (!item.aggregate && node.kind === "file") {
       paintFileIcon(ctx, node.path, x + 10, baseline - 12);
-      ctx.fillText(text, x + 30, baseline);
-    } else {
-      const label = item.aggregate ? text : `${icon}  ${text}`;
-      ctx.fillText(label, x + 10, baseline);
     }
+    ctx.fillText(label, labelX, baseline);
+    paintBadges(ctx, horizontalBadges, labelX + ctx.measureText(label).width + 7, baseline, dark);
     if (h >= 38) {
       ctx.globalAlpha = (changes && unchanged ? 0.38 : 0.8) * textOpacity;
       ctx.font = '11px "SUIT Variable", system-ui, sans-serif';
-      ctx.fillText(
-        changes ? `${signed(node.delta)} lines` : `${node.afterLoc.toLocaleString()} lines`,
-        x + 10,
-        y + 36,
+      const lines =
+        changes && !item.aggregate && node.kind === "file"
+          ? `${data.beforeLoc.toLocaleString()} → ${data.afterLoc.toLocaleString()} LOC`
+          : `${(item.aggregate ? item.nodes.reduce((sum, n) => sum + n.data.afterLoc, 0) : data.afterLoc).toLocaleString()} LOC`;
+      ctx.fillText(lines, x + 10, y + 36);
+    }
+    if (description && w >= 100 && h >= 68) {
+      ctx.font = '11px "SUIT Variable", system-ui, sans-serif';
+      ctx.globalAlpha = (changes && unchanged ? 0.65 : 0.85) * textOpacity;
+      wrapText(ctx, description, w - 20, Math.min(12, Math.floor((h - 53) / 15))).forEach(
+        (line, index) => ctx.fillText(line, x + 10, y + 53 + index * 15),
       );
     }
     ctx.restore();

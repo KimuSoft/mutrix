@@ -23,6 +23,7 @@ import { Inspector } from "./components/Inspector";
 import { DiagnosticsDialog } from "./components/DiagnosticsDialog";
 import { Button } from "./components/ui/button";
 import { editorUri } from "./lib/node-links";
+import { DEFAULT_WARN_LOC } from "./chart/labels";
 
 interface ViewSnapshot {
   focus: string;
@@ -40,6 +41,7 @@ export function App({ initialReport }: { initialReport: Report }) {
   const currentCamera = useRef<ChartCamera>(identityCamera());
   const [initialCamera, setInitialCamera] = useState<ChartCamera>(currentCamera.current);
   const [changes, setChanges] = useState(report.meta.mode === "changes");
+  const [warnLoc, setWarnLoc] = useState(DEFAULT_WARN_LOC);
   const [filters, setFilters] = useState<Filters>({ changed: false, extension: "", sort: "path" });
   const [left, setLeft] = useState(() => window.innerWidth > 600),
     [right, setRight] = useState(() => window.innerWidth > 900);
@@ -244,6 +246,7 @@ export function App({ initialReport }: { initialReport: Report }) {
       <main className={`workspace ${!left ? "no-explorer" : ""} ${!right ? "no-inspector" : ""}`}>
         {left && (
           <Explorer
+            warnLoc={warnLoc}
             nodes={report.nodes}
             index={index}
             rootId={report.rootId}
@@ -286,6 +289,8 @@ export function App({ initialReport }: { initialReport: Report }) {
             </Button>
           </div>
           <MatrixChart
+            warnLoc={warnLoc}
+            onWarnLoc={setWarnLoc}
             layout={layout}
             dark={dark}
             changes={changes}
@@ -300,6 +305,7 @@ export function App({ initialReport }: { initialReport: Report }) {
         </section>
         {right && (
           <Inspector
+            warnLoc={warnLoc}
             node={node}
             rootPath={report.meta.rootPath}
             changes={changes}
