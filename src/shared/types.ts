@@ -8,6 +8,10 @@ export interface FunctionSignature {
   parameters: { name: string; type: string; optional: boolean; rest: boolean }[];
   returnType: string;
 }
+export interface PackageSnapshot {
+  name?: string;
+  kind?: "cargo";
+}
 export interface ReportNode {
   id: string;
   parentId: string | null;
@@ -17,7 +21,7 @@ export interface ReportNode {
   symbolKind?: string;
   documentation?: { before?: string; after?: string };
   signature?: { before?: FunctionSignature; after?: FunctionSignature };
-  package?: { before?: { name?: string }; after?: { name?: string } };
+  package?: { before?: PackageSnapshot; after?: PackageSnapshot };
   beforeRange?: SourceRange;
   afterRange?: SourceRange;
   beforeLoc: number;

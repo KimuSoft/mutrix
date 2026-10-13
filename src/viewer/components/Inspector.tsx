@@ -37,6 +37,7 @@ export function Inspector({
   );
   const range = node.afterRange ?? node.beforeRange;
   const uri = editorUri(rootPath, node);
+  const packageSnapshot = node.package?.after ?? node.package?.before;
   const statusCaption = changes
     ? node.status === "added" || node.status === "deleted"
       ? undefined
@@ -65,7 +66,7 @@ export function Inspector({
         </div>
         <span>
           {node.package
-            ? `package${node.package.after?.name || node.package.before?.name ? ` · ${node.package.after?.name ?? node.package.before?.name}` : ""}`
+            ? `${packageSnapshot?.kind === "cargo" ? "crate" : "package"}${packageSnapshot?.name ? ` · ${packageSnapshot.name}` : ""}`
             : (node.symbolKind ?? node.kind)}
         </span>
         <h2>{node.name}</h2>

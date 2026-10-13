@@ -59,13 +59,14 @@ export async function analyze(options: AnalyzeOptions): Promise<Report> {
       const after = afterText === undefined ? undefined : analyzeFile(path, afterText);
       context.diagnostics.push(...(before?.diagnostics ?? []), ...(after?.diagnostics ?? []));
       tree.addFile(path, before, after);
-      if (path.split("/").at(-1) === "package.json") {
+      if (["package.json", "Cargo.toml"].includes(path.split("/").at(-1)!)) {
         const parentId = tree.nodes.get(`file:${path}`)!.parentId!;
         tree.nodes.get(parentId)!.package = packageInfo(
           path,
           beforeText,
           afterText,
           context.diagnostics,
+          tree.nodes.get(parentId)!.package,
         );
       }
       files++;

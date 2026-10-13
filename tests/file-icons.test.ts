@@ -30,6 +30,13 @@ test("Common text formats have SVG paths and unknown files keep the fallback", (
     expect(fileIcon(path)).toBeUndefined();
 });
 
+test("Rust source files share the Rust SVG path across case and path separators", () => {
+  for (const path of ["src/lib.rs", "src/main.rs", "build.rs", "C:\\app\\Main.RS"])
+    expect(fileIcon(path)?.slug).toBe("rust");
+  expect(fileIcon("src/lib.rs")?.path.length).toBeGreaterThan(0);
+  expect(fileIcon("Cargo.toml")?.slug).toBe("toml");
+});
+
 test("test.ts suffix takes priority over the TypeScript logo, using only the file name", () => {
   for (const path of ["tests/parser.test.ts", "C:\\app\\Parser.TEST.TS"])
     expect(fileIcon(path)?.slug).toBe("test");
