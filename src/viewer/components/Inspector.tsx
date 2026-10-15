@@ -52,7 +52,7 @@ export function Inspector({
     }
   };
   return (
-    <aside className="inspector">
+    <aside className={`inspector ${node.plan ? "planning-inspector" : ""}`}>
       <div className="panel-heading">
         <span>INSPECTOR</span>
         <span className="inspector-status">
@@ -89,12 +89,12 @@ export function Inspector({
         <Button
           size="icon"
           variant="outline"
-          disabled={node.status === "deleted"}
-          asChild={node.status !== "deleted"}
+          disabled={!uri}
+          asChild={!!uri}
           title="Open in VS Code"
           aria-label="Open in VS Code"
         >
-          {node.status === "deleted" ? (
+          {!uri ? (
             <ExternalLink />
           ) : (
             <a href={uri}>
@@ -107,22 +107,33 @@ export function Inspector({
         <h3>LINES OF CODE</h3>
         <div className="loc-main">
           {format(node.afterLoc)}
-          <span>current lines</span>
+          <span>
+            {node.plan?.estimated
+              ? "estimated lines"
+              : node.plan && node.summary
+                ? "current lines · 규모 미정"
+                : "current lines"}
+          </span>
         </div>
         {changes && (
           <>
             <div className="loc-compare">
-              <span>기준 {format(node.beforeLoc)}</span>
-              <b className={`delta ${node.delta > 0 ? "added" : node.delta < 0 ? "deleted" : ""}`}>
+              <span>
+                {node.plan ? "현재" : "기준"} {format(node.beforeLoc)}
+              </span>
+              <b
+                className={`delta ${node.plan ? "planned" : node.delta > 0 ? "added" : node.delta < 0 ? "deleted" : ""}`}
+              >
                 {signed(node.delta)} <small>{percentLabel(node)}</small>
               </b>
             </div>
             <div className="churn-row">
               <span>
-                <ArrowUpRight size={14} />+{format(node.added)} 추가
+                <ArrowUpRight size={14} />+{format(node.added)} {node.plan ? "예정 추가" : "추가"}
               </span>
               <span>
-                <ArrowDownRight size={14} />−{format(node.removed)} 삭제
+                <ArrowDownRight size={14} />−{format(node.removed)}{" "}
+                {node.plan ? "예정 삭제" : "삭제"}
               </span>
             </div>
           </>
@@ -138,13 +149,13 @@ export function Inspector({
           <h3>SOURCE RANGE</h3>
           {node.beforeRange && changes && (
             <div className="metric-row">
-              <span>기준</span>
+              <span>{node.plan ? "현재 스냅샷" : "기준"}</span>
               <code>
                 {node.beforeRange.startLine}–{node.beforeRange.endLine}
               </code>
             </div>
           )}
-          {node.afterRange && (
+          {node.afterRange && !node.plan && (
             <div className="metric-row">
               <span>현재</span>
               <code>

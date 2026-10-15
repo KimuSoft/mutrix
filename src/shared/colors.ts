@@ -16,6 +16,11 @@ export function nodeFill(node: ReportNode, changes: boolean, dark: boolean): str
   if (!changes) {
     return dark ? "#404040" : "#d4d4d4";
   }
+  if (node.plan) {
+    if (node.added) return planColor("added", dark);
+    if (node.removed) return planColor("removed", dark);
+    return dark ? "#525252" : "#d4d4d4";
+  }
   const rate = growth(node);
   if (node.status === "added" || rate > 0) {
     const t = node.status === "added" ? 1 : Math.min(1, Math.abs(rate));
@@ -26,6 +31,9 @@ export function nodeFill(node: ReportNode, changes: boolean, dark: boolean): str
     return mix(dark ? [81, 51, 47] : [250, 221, 213], dark ? [181, 70, 54] : [194, 76, 53], t);
   }
   return dark ? "#525252" : "#d4d4d4";
+}
+export function planColor(direction: "added" | "removed", dark: boolean): string {
+  return direction === "added" ? (dark ? "#1d4ed8" : "#bfdbfe") : dark ? "#9d174d" : "#fbcfe8";
 }
 function mix(a: number[], b: number[], t: number) {
   return `rgb(${a.map((value, i) => Math.round(value + (b[i] - value) * t)).join(",")})`;

@@ -2,7 +2,7 @@ import type { ReportNode } from "../../shared/types";
 import { signed } from "../lib/utils";
 
 export const DEFAULT_WARN_LOC = 500;
-export type NodeBadgeLabel = "NEW" | "DEL" | "WARN" | `${"+" | "−"}${string}`;
+export type NodeBadgeLabel = "NEW" | "DEL" | "WARN" | "PLAN" | `${"+" | "−"}${string}`;
 
 export function nodeBadges(
   node: ReportNode,
@@ -12,6 +12,15 @@ export function nodeBadges(
 ): NodeBadgeLabel[] {
   if (node.kind === "residual") return [];
   const badges: NodeBadgeLabel[] = [];
+  if (changes && node.plan) {
+    if (node.plan.virtual) badges.push("NEW");
+    if (node.added) badges.push(`+${node.added}`);
+    if (node.removed) badges.push(`−${node.removed}`);
+    if (!badges.length && node.summary?.trim()) badges.push("PLAN");
+    if ((node.kind === "file" || node.kind === "scope") && node.afterLoc > warnLoc)
+      badges.push("WARN");
+    return badges;
+  }
   if (changes && node.status === "added") badges.push("NEW");
   if (changes && node.status === "deleted") badges.push("DEL");
   if (changes && node.status !== "added" && node.status !== "deleted" && delta !== 0)

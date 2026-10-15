@@ -34,6 +34,8 @@ export interface ReportNode {
   children: string[];
   summary?: string;
   rename?: { path: string; nodeId: string };
+  /** Present only in the derived planning view; snapshot metrics remain untouched. */
+  plan?: { added: number; removed: number; virtual?: boolean; estimated?: boolean };
 }
 export interface Diagnostic {
   level: "info" | "warning";
@@ -58,6 +60,7 @@ export interface Report {
   rootId: string;
   nodes: ReportNode[];
   diagnostics: Diagnostic[];
+  plan?: SummaryDocument;
 }
 export interface GeneratedExclusion {
   path: string;
@@ -66,7 +69,14 @@ export interface GeneratedExclusion {
 }
 export interface SummaryDocument {
   schemaVersion: 1;
-  entries: { nodeId: string; summary: string }[];
+  mode?: "plan";
+  entries: SummaryEntry[];
+}
+export interface SummaryEntry {
+  nodeId: string;
+  summary: string;
+  plan?: { added: number; removed: number };
+  create?: { parentId: string; kind: "folder" | "file" | "scope"; name: string; path: string };
 }
 export interface AnalyzeOptions {
   path: string;

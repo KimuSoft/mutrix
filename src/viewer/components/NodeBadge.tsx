@@ -11,7 +11,10 @@ export function NodeBadge({
   warnLoc?: number;
 }) {
   return nodeBadges(node, changes, warnLoc).map((label) => (
-    <span key={label} className={`node-badge ${label === "WARN" ? "warning" : node.status}`}>
+    <span
+      key={label}
+      className={`node-badge ${label === "WARN" ? "warning" : node.plan ? "planned" : node.status}`}
+    >
       {label}
     </span>
   ));

@@ -109,6 +109,53 @@ JSDoc과 변경 Summary는 패키지·파일·심볼 노드의 이름·라인 �
 
 JSON 보고서는 `schemaVersion`, `meta`, `rootId`, `nodes`, `diagnostics`로 구성합니다. 노드는 `id`, `parentId`, `children`, 종류·경로·이름, 전후 줄 범위·LOC, `delta`, `added`, `removed`, `status`, `weight`, 선택적 `summary`·`rename`을 제공합니다. 소스 본문이나 AST는 HTML·JSON에 포함하지 않습니다. 분석 계약은 `src/shared/types.ts`에 있습니다.
 
+## 구현 전 계획 보기
+
+코드를 수정하지 않고 AI가 작성한 계획을 현재 작업 폴더 스냅샷 위에 표시할 수 있습니다. JSON 보고서로 노드 ID와 현재 `afterLoc`를 확인한 다음, Summary JSON에 `mode: "plan"`과 항목별 `plan` 또는 `create`를 지정합니다. Git 비교 보고서에서도 계획의 기준은 merge-base가 아닌 **현재 스냅샷**입니다. 기존 Summary JSON은 그대로 사용할 수 있습니다.
+
+```json
+{
+  "schemaVersion": 1,
+  "mode": "plan",
+  "entries": [
+    {
+      "nodeId": "file:src/parser.ts",
+      "summary": "검증 로직을 별도 파일로 옮깁니다.",
+      "plan": { "added": 20, "removed": 100 }
+    },
+    {
+      "nodeId": "plan:validation",
+      "summary": "검증 모듈을 추가합니다.",
+      "create": {
+        "parentId": "folder:src",
+        "kind": "file",
+        "name": "validation.ts",
+        "path": "src/validation.ts"
+      },
+      "plan": { "added": 120, "removed": 0 }
+    }
+  ]
+}
+```
+
+기존 노드 ID는 보고서에서 복사합니다. 새 노드 ID는 문서 안에서 고유하게 지정하며 `plan:` 접두사를 권장합니다. `create.kind`는 `folder`, `file`, `scope`를 받습니다. 폴더·파일은 프로젝트 또는 폴더 아래에, 스코프는 파일 또는 스코프 아래에 생성합니다. 경로는 `/`로 구분한 프로젝트 상대 경로이며 새 스코프는 부모와 같은 파일 경로를 사용합니다. 새 부모를 같은 문서에서 먼저 선언하지 않아도 됩니다. 가상 노드는 아직 존재하지 않으므로 에디터 링크를 제공하지 않습니다.
+
+```powershell
+mutrix.exe . --json artifacts/snapshot.json --output artifacts/snapshot.html
+# AI가 snapshot.json의 ID·현재 LOC를 참고해 plan.json 작성
+mutrix.exe . --summaries plan.json --json artifacts/planned.json --output artifacts/planned.html
+```
+
+CLI의 `--summaries` 또는 화면의 **Summary / 계획 불러오기**에서 같은 문서를 받으며 자동으로 Plan 보기로 전환합니다. 이후 Structure·Changes·Plan을 전환해 볼 수 있습니다. 계획 불러오기는 이전 계획을 교체하며 일반 Summary는 실제 변경 설명에 적용됩니다. HTML에 포함된 계획은 다른 경로로 옮겨도 오프라인으로 동작합니다. 보고서 JSON은 원본 `nodes`와 별도 `plan` 문서를 저장하며 실제 분석 수치를 덮어쓰지 않습니다. 기준 스냅샷 이후 코드가 바뀌면 계획과 추정치를 다시 검토해야 합니다.
+
+- 파란색은 예정 추가, 분홍색은 예정 삭제입니다. 두 작업이 있으면 색상과 `+추가 / −삭제` 배지를 함께 표시하며 순증감 0도 숨기지 않습니다.
+- 예상 LOC는 `현재 + 예정 추가 − 예정 삭제`로 계산하고 `130 → 약 200 LOC`로 표시합니다. 삭제만 계획한 영역도 높이를 유지합니다. 부모 높이는 말단별 `max(현재, 예상)`의 합이며 필터·확대·LOD는 같은 수치를 사용합니다.
+- 줄 수 없는 설명도 허용합니다. 기존 높이를 유지하고 `PLAN`·`규모 미정`으로 표시하며 0 LOC 가상 노드는 트리·검색에서 접근합니다. 추정치는 AI가 제공한 값이며 실제 diff나 품질 점수가 아닙니다.
+- 노드 전체에 추정치를 지정하면 그 아래 기존 심볼은 계획 보기에서 접어 한 영역으로 표시합니다. 하위 분량을 임의로 배분하지 않습니다. 조상·자손 항목이 겹치면 조상 추정치를 건너뛰고 진단을 남겨 자손 항목을 보존합니다.
+- 음수·소수 추정치, 현재 LOC보다 큰 삭제량, 잘못된 부모·경로, 중복·모르는 ID는 오류 또는 진단으로 표시합니다. 부분 삭제와 파일 자체의 삭제 여부를 추정치만으로 구분할 수 없으므로 `−현재 LOC`도 예정 삭제량으로 표시합니다.
+
+[examples/plan.json](examples/plan.json)은 Mutrix 자체 보고서에서 불러올 수 있는 가상 계획 예시입니다.
+
 ## Codex로 PR 결과 확인
 
 레포에 [mutrix-pr-review](.agents/skills/mutrix-pr-review/SKILL.md) 스킬이 포함되어 있습니다. `.agents/skills`는 [OpenAI 공식 문서](https://learn.chatgpt.com/docs/build-skills)의 레포 스킬 위치를 따릅니다. Codex에서 `$mutrix-pr-review로 이 PR의 결과를 확인하고 Summary가 붙은 HTML 보고서를 만들어줘`처럼 요청하면 사용합니다.

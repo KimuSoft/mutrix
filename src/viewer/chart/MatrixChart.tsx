@@ -68,6 +68,7 @@ export function MatrixChart({
   }>();
   const [displayCamera, setDisplayCamera] = useState(initialCamera);
   useEffect(() => {
+    setTooltip(undefined);
     if (!canvas.current || !host.current || !layout) return;
     const element = canvas.current,
       container = host.current;
@@ -295,7 +296,7 @@ export function MatrixChart({
   return (
     <div className="matrix-region">
       <div className="axis-label">
-        {changes ? "비교 표시 LOC" : "LOC"}
+        {layout?.root.data.node.plan ? "계획 표시 LOC · 추정" : changes ? "비교 표시 LOC" : "LOC"}
         <span>↑{changes && ` ${format(layout?.total ?? 0)}`}</span>
       </div>
       <div className="matrix-host" ref={host}>
@@ -330,13 +331,17 @@ export function MatrixChart({
             </span>
             {tooltip.count === 1 && (
               <span>
+                {tooltip.node.plan &&
+                  `${format(tooltip.node.beforeLoc)} → ${tooltip.node.plan.estimated ? "약 " : "규모 미정 · "}`}
                 {format(tooltip.node.afterLoc)} LOC{" "}
                 {changes &&
                   `· ${signed(tooltip.node.delta)} · +${tooltip.node.added} / −${tooltip.node.removed}`}
               </span>
             )}
             {tooltip.count === 1 && tooltip.node.summary && (
-              <p className="tooltip-summary">변경: {tooltip.node.summary}</p>
+              <p className="tooltip-summary">
+                {tooltip.node.plan ? "계획" : "변경"}: {tooltip.node.summary}
+              </p>
             )}
             {tooltip.count === 1 && (
               <p className="tooltip-documentation">

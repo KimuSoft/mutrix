@@ -2,7 +2,7 @@ import template from "../../dist/viewer/index.html" with { type: "text" };
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { analyze } from "../analysis";
-import { attachSummaries, parseSummaries } from "../shared/summaries";
+import { attachDocument, parseSummaries } from "../shared/summaries";
 import { renderHtml } from "../report/html";
 import { cliOptions, HELP } from "./args";
 import { checkOutput, save } from "./output";
@@ -47,7 +47,7 @@ async function main() {
     includeGenerated: options["include-generated"],
     omit: [output, json, summaries].filter((path): path is string => !!path),
   });
-  if (summaryDoc) report.diagnostics.push(...attachSummaries(report.nodes, summaryDoc));
+  if (summaryDoc) report.diagnostics.push(...attachDocument(report, summaryDoc));
   // Bun's runtime honors type:text; older HTML module declarations still say HTMLBundle.
   const html = renderHtml(template as unknown as string, report);
   if (json) await save(json, JSON.stringify(report, null, 2));
