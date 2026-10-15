@@ -27,7 +27,7 @@ export function projectPlan(report: Report, doc: SummaryDocument) {
         : undefined,
       summary: undefined,
       rename: undefined,
-      plan: { added: 0, removed: 0 },
+      plan: {},
     });
   }
   for (const node of nodes.values()) node.children = node.children.filter((id) => nodes.has(id));
@@ -82,7 +82,7 @@ export function projectPlan(report: Report, doc: SummaryDocument) {
         weight: 0,
         status: "added",
         children: [],
-        plan: { added: 0, removed: 0, virtual: true },
+        plan: { virtual: true },
       };
       nodes.set(node.id, node);
       if (spec.kind !== "scope") paths.add(spec.path);
@@ -122,13 +122,33 @@ export function projectPlan(report: Report, doc: SummaryDocument) {
       continue;
     }
     node.summary = entry.summary;
-    if (!entry.plan) continue;
-    if (entry.plan.removed > node.beforeLoc || !Number.isSafeInteger(budget + entry.plan.added)) {
+    if (entry.plan?.signature) {
+      if (node.kind !== "scope" || (!node.plan?.virtual && !node.signature?.after)) {
+        warn(`Function contract requires a function scope: ${node.id}`);
+      } else {
+        const { parameters, returnType } = entry.plan.signature;
+        node.signature = {
+          before: node.signature?.before,
+          after: {
+            parameters: parameters.map((parameter) => ({
+              ...parameter,
+              optional: !!parameter.optional,
+              rest: !!parameter.rest,
+            })),
+            returnType,
+          },
+        };
+        node.plan = { ...node.plan, proposedSignature: true };
+      }
+    }
+    const delta = entry.plan?.delta;
+    if (delta === undefined) continue;
+    if (node.beforeLoc + delta < 0 || !Number.isSafeInteger(budget + Math.max(0, delta))) {
       warn(`Invalid plan LOC estimate: ${entry.nodeId}`);
       continue;
     }
     estimates.add(node.id);
-    budget += entry.plan.added;
+    budget += Math.max(0, delta);
   }
   const conflicts = new Set<string>();
   for (const node of nodes.values()) {
@@ -148,13 +168,13 @@ export function projectPlan(report: Report, doc: SummaryDocument) {
   const visit = (id: string): ReportNode | undefined => {
     const node = nodes.get(id);
     if (!node) return;
-    const estimate = estimates.has(id) ? entries.get(id)!.plan : undefined;
-    if (estimate) {
+    const delta = estimates.has(id) ? entries.get(id)!.plan!.delta : undefined;
+    if (delta !== undefined) {
       // Whole-node estimates do not invent a distribution among existing scopes.
       node.children = [];
-      node.added = estimate.added;
-      node.removed = estimate.removed;
-      node.afterLoc = node.beforeLoc + node.added - node.removed;
+      node.added = Math.max(0, delta);
+      node.removed = Math.max(0, -delta);
+      node.afterLoc = node.beforeLoc + delta;
       node.weight = Math.max(node.beforeLoc, node.afterLoc);
       node.plan = { ...node.plan!, estimated: true };
     } else {
@@ -170,9 +190,9 @@ export function projectPlan(report: Report, doc: SummaryDocument) {
     const changed =
       node.added + node.removed ||
       node.summary?.trim() ||
+      node.plan?.proposedSignature ||
       node.children.some((id) => nodes.get(id)?.status !== "unchanged");
     node.status = node.plan?.virtual ? "added" : changed ? "modified" : "unchanged";
-    node.plan = { ...node.plan, added: node.added, removed: node.removed };
     result.push(node);
     return node;
   };

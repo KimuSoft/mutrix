@@ -21,11 +21,32 @@ export function parseSummaries(value: unknown): SummaryDocument {
       entry.plan !== undefined &&
       (!entry.plan ||
         typeof entry.plan !== "object" ||
-        ![entry.plan.added, entry.plan.removed].every(
-          (value) => Number.isSafeInteger(value) && value >= 0,
-        ))
+        Array.isArray(entry.plan) ||
+        Object.keys(entry.plan).some((key) => key !== "delta" && key !== "signature") ||
+        (entry.plan.delta !== undefined && !Number.isSafeInteger(entry.plan.delta)))
     )
-      throw new Error("Plan added/removed must be nonnegative safe integers.");
+      throw new Error("Plan requires a signed integer delta and/or a function signature.");
+    if (entry.plan?.signature !== undefined) {
+      const signature = entry.plan.signature;
+      if (
+        !signature ||
+        typeof signature !== "object" ||
+        typeof signature.returnType !== "string" ||
+        !signature.returnType.trim() ||
+        !Array.isArray(signature.parameters) ||
+        signature.parameters.some(
+          (parameter) =>
+            !parameter ||
+            typeof parameter.name !== "string" ||
+            !parameter.name.trim() ||
+            typeof parameter.type !== "string" ||
+            !parameter.type.trim() ||
+            (parameter.optional !== undefined && typeof parameter.optional !== "boolean") ||
+            (parameter.rest !== undefined && typeof parameter.rest !== "boolean"),
+        )
+      )
+        throw new Error("A function signature requires named, typed parameters and a returnType.");
+    }
     if (entry.create !== undefined) {
       const spec = entry.create;
       if (

@@ -14,9 +14,9 @@ export function nodeBadges(
   const badges: NodeBadgeLabel[] = [];
   if (changes && node.plan) {
     if (node.plan.virtual) badges.push("NEW");
-    if (node.added) badges.push(`+${node.added}`);
-    if (node.removed) badges.push(`−${node.removed}`);
-    if (!badges.length && node.summary?.trim()) badges.push("PLAN");
+    if (delta !== 0) badges.push(signed(delta) as NodeBadgeLabel);
+    if (!badges.length && (node.summary?.trim() || node.plan.proposedSignature))
+      badges.push("PLAN");
     if ((node.kind === "file" || node.kind === "scope") && node.afterLoc > warnLoc)
       badges.push("WARN");
     return badges;

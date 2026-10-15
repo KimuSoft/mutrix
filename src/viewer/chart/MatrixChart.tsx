@@ -335,7 +335,9 @@ export function MatrixChart({
                   `${format(tooltip.node.beforeLoc)} → ${tooltip.node.plan.estimated ? "약 " : "규모 미정 · "}`}
                 {format(tooltip.node.afterLoc)} LOC{" "}
                 {changes &&
-                  `· ${signed(tooltip.node.delta)} · +${tooltip.node.added} / −${tooltip.node.removed}`}
+                  (tooltip.node.plan
+                    ? `· 예정 ${signed(tooltip.node.delta)}`
+                    : `· ${signed(tooltip.node.delta)} · +${tooltip.node.added} / −${tooltip.node.removed}`)}
               </span>
             )}
             {tooltip.count === 1 && tooltip.node.summary && (

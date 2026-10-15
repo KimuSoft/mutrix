@@ -1,11 +1,13 @@
 ---
 name: mutrix-pr-review
-description: Mutrix로 PR 또는 로컬 브랜치의 코드 구조와 변경량을 분석하고, 실제 diff를 검토해 노드별 Summary가 포함된 오프라인 HTML 보고서를 만든다. PR 변경 결과 시각화, 변경 범위 확인, Mutrix Summary 작성 요청에 사용한다.
+description: Mutrix로 PR·로컬 변경을 검토하거나 현재 코드 구조 위에 구현 전 변경 규모·함수 계약을 제안하는 오프라인 HTML 보고서를 만든다. 변경 결과 시각화, Summary 작성, Mutrix를 이용한 계획 제안 요청에 사용한다.
 ---
 
-# Mutrix로 PR 결과 확인
+# Mutrix로 변경 검토와 계획 제안
 
 코드 변경의 위치·크기·계층을 Mutrix로 확인하고, 실제 diff에 근거한 설명을 붙인 HTML과 JSON을 제공한다. LOC 증감만으로 코드 품질이나 리팩토링 필요성을 판정하지 않는다.
+
+구현 전 계획 요청에는 [references/planning.md](references/planning.md)를 읽고 현재 스냅샷에 예상 순증감·새 노드·함수 계약을 제안한다. 기존 스킬 이름 `$mutrix-pr-review`로 두 흐름을 모두 사용할 수 있다. 아래 절차는 구현 후 실제 변경 검토에 적용한다. 계획 보고서 생성은 소스 수정·Git 변경·원격 게시를 추가로 허가하지 않는다.
 
 ## 비교 대상 확보
 

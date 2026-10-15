@@ -38,6 +38,16 @@ export function Inspector({
   const range = node.afterRange ?? node.beforeRange;
   const uri = editorUri(rootPath, node);
   const packageSnapshot = node.package?.after ?? node.package?.before;
+  const deltaClass =
+    node.delta > 0
+      ? node.plan
+        ? "plan-increase"
+        : "added"
+      : node.delta < 0
+        ? node.plan
+          ? "plan-decrease"
+          : "deleted"
+        : "";
   const statusCaption = changes
     ? node.status === "added" || node.status === "deleted"
       ? undefined
@@ -52,7 +62,7 @@ export function Inspector({
     }
   };
   return (
-    <aside className={`inspector ${node.plan ? "planning-inspector" : ""}`}>
+    <aside className="inspector">
       <div className="panel-heading">
         <span>INSPECTOR</span>
         <span className="inspector-status">
@@ -121,21 +131,21 @@ export function Inspector({
               <span>
                 {node.plan ? "현재" : "기준"} {format(node.beforeLoc)}
               </span>
-              <b
-                className={`delta ${node.plan ? "planned" : node.delta > 0 ? "added" : node.delta < 0 ? "deleted" : ""}`}
-              >
-                {signed(node.delta)} <small>{percentLabel(node)}</small>
+              <b className={`delta ${deltaClass}`}>
+                {node.plan && "예정 "}
+                {signed(node.delta)} {!node.plan && <small>{percentLabel(node)}</small>}
               </b>
             </div>
-            <div className="churn-row">
-              <span>
-                <ArrowUpRight size={14} />+{format(node.added)} {node.plan ? "예정 추가" : "추가"}
-              </span>
-              <span>
-                <ArrowDownRight size={14} />−{format(node.removed)}{" "}
-                {node.plan ? "예정 삭제" : "삭제"}
-              </span>
-            </div>
+            {!node.plan && (
+              <div className="churn-row">
+                <span>
+                  <ArrowUpRight size={14} />+{format(node.added)} 추가
+                </span>
+                <span>
+                  <ArrowDownRight size={14} />−{format(node.removed)} 삭제
+                </span>
+              </div>
+            )}
           </>
         )}
         <div className="metric-row">
