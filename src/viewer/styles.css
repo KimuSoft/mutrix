@@ -201,6 +201,34 @@ button {
 .legend-increase {
   background: #288b4c;
 }
+.plan-legend .legend-increase {
+  background: #bfdbfe;
+}
+.plan-legend .legend-decrease {
+  background: #fbcfe8;
+}
+.dark .plan-legend .legend-increase {
+  background: #1d4ed8;
+}
+.dark .plan-legend .legend-decrease {
+  background: #9d174d;
+}
+.node-badge.planned {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.planning-inspector .churn-row span:first-child {
+  color: #2563eb;
+}
+.planning-inspector .churn-row span:last-child {
+  color: #db2777;
+}
+.dark .planning-inspector .churn-row span:first-child {
+  color: #93c5fd;
+}
+.dark .planning-inspector .churn-row span:last-child {
+  color: #f9a8d4;
+}
 .legend-decrease {
   background: #c24c35;
 }

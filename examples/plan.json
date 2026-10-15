@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "mode": "plan",
+  "entries": [
+    {
+      "nodeId": "file:src/shared/summaries.ts",
+      "summary": "예시 계획: 입력 검증을 별도 모듈로 분리하고 호출부를 정리합니다. 실제 구현 예정 사항은 아닙니다.",
+      "plan": { "added": 10, "removed": 20 }
+    },
+    {
+      "nodeId": "plan:summary-validation",
+      "summary": "예시 계획: Summary 검증을 담당하는 새 모듈입니다. 80줄은 AI가 지정한 추정치입니다.",
+      "create": {
+        "parentId": "folder:src/shared",
+        "kind": "file",
+        "name": "summary-validation.ts",
+        "path": "src/shared/summary-validation.ts"
+      },
+      "plan": { "added": 80, "removed": 0 }
+    },
+    {
+      "nodeId": "folder:src/viewer",
+      "summary": "예시 계획: 오류 안내 문구를 검토합니다. 규모는 아직 정하지 않았습니다."
+    }
+  ]
+}

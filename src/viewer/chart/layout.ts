@@ -31,11 +31,15 @@ export function buildLayout(
   filters: Filters,
   currentOnly = false,
 ): ChartLayout | undefined {
-  const collect = (id: string): LayoutData | undefined => {
+  const collect = (id: string, planContext = false): LayoutData | undefined => {
     const node = index.get(id)!;
-    const children = node.children.map(collect).filter((child): child is LayoutData => !!child);
+    const keepContext =
+      planContext || !!(node.plan && node.summary?.trim() && !node.plan.estimated);
+    const children = node.children
+      .map((child) => collect(child, keepContext))
+      .filter((child): child is LayoutData => !!child);
     const matches =
-      (!filters.changed || node.status !== "unchanged") &&
+      (!filters.changed || keepContext || node.status !== "unchanged") &&
       (!filters.extension || node.path.endsWith(filters.extension));
     if (node.children.length && children.length === 0 && !matches) return undefined;
     if (!node.children.length && !matches) return undefined;

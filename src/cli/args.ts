@@ -8,7 +8,7 @@ Usage: mutrix [path] [options]
   --base <ref>         Base reference (auto: master, main, origin/master, origin/main)
   --output <path>      Single HTML report (default: <path>/mutrix-report.html)
   --json <path>        Also export schemaVersion 1 analysis JSON
-  --summaries <path>   Attach a Summary JSON document
+  --summaries <path>   Attach a Summary or planning JSON document
   --exclude <glob>     Additional exclusion; repeat to add patterns
   --include-generated Include linguist-generated files (excluded by default)
   --open              Open the generated report in the default browser

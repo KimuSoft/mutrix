@@ -2,7 +2,7 @@ import { color } from "d3-color";
 import type { FunctionSignature } from "../../shared/types";
 import type { DrawItem } from "./lod";
 import type { ChartCamera } from "./camera";
-import { nodeFill } from "../../shared/colors";
+import { nodeFill, planColor } from "../../shared/colors";
 import type { ColumnGeometry } from "./columns";
 import { fileIcon } from "../lib/file-icons";
 import { fitText, wrapText, nodeBadges, folderHasDescription, type NodeBadgeLabel } from "./labels";
@@ -220,16 +220,21 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
     const hovered = item.nodes.some((n) => n.data.node.id === options.hovered);
     const textOpacity = residual && !selected && !hovered ? 0.5 : 1;
     ctx.globalAlpha = (changes && unchanged ? 0.24 : 1) * (residual ? 0.4 : 1);
-    ctx.fillStyle = nodeFill(node, changes, dark);
+    const visibleData = item.nodes[0].data;
+    ctx.fillStyle = nodeFill(
+      node.plan ? { ...node, added: visibleData.added, removed: visibleData.removed } : node,
+      changes,
+      dark,
+    );
     ctx.fillRect(x, y, w, h);
-    if (item.aggregate) {
+    if (item.aggregate || node.plan) {
       const additions = item.nodes.reduce((sum, n) => sum + n.data.added, 0);
       const removals = item.nodes.reduce((sum, n) => sum + n.data.removed, 0);
       if (changes && additions + removals > 0) {
         const split = (w * additions) / (additions + removals);
-        ctx.fillStyle = dark ? "#248951" : "#288b4c";
+        ctx.fillStyle = node.plan ? planColor("added", dark) : dark ? "#248951" : "#288b4c";
         ctx.fillRect(x, y, split, h);
-        ctx.fillStyle = dark ? "#b54636" : "#c24c35";
+        ctx.fillStyle = node.plan ? planColor("removed", dark) : dark ? "#b54636" : "#c24c35";
         ctx.fillRect(x + split, y, w - split, h);
       }
     }
@@ -257,7 +262,9 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
       node.status === "deleted" ? node.documentation?.before : node.documentation?.after;
     const description =
       !item.aggregate && (node.package || (node.kind !== "folder" && node.kind !== "project"))
-        ? [node.summary && `변경: ${node.summary}`, documentation].filter(Boolean).join("\n")
+        ? [node.summary && `${node.plan ? "계획" : "변경"}: ${node.summary}`, documentation]
+            .filter(Boolean)
+            .join("\n")
         : "";
     const fill = color(String(ctx.fillStyle));
     const rgb = fill?.rgb();
@@ -343,10 +350,14 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
       ctx.globalAlpha = (changes && unchanged ? 0.38 : 0.8) * textOpacity;
       ctx.font = '11px "SUIT Variable", system-ui, sans-serif';
       const lines =
-        changes && !item.aggregate && fileLike
-          ? `${data.beforeLoc.toLocaleString()} → ${data.afterLoc.toLocaleString()} LOC`
+        changes && !item.aggregate && (fileLike || node.plan)
+          ? `${data.beforeLoc.toLocaleString()} → ${node.plan ? "약 " : ""}${data.afterLoc.toLocaleString()} LOC`
           : `${(item.aggregate ? item.nodes.reduce((sum, n) => sum + n.data.afterLoc, 0) : data.afterLoc).toLocaleString()} LOC`;
-      ctx.fillText(lines, x + 10, y + 36);
+      const planLines =
+        node.plan && !node.plan.estimated
+          ? `${data.beforeLoc.toLocaleString()} LOC${node.summary || node.plan.virtual ? " · 규모 미정" : ""}`
+          : lines;
+      ctx.fillText(planLines, x + 10, y + 36);
     }
     let bodyY = y + 53;
     if (!item.aggregate && w >= 100 && h >= 108) {

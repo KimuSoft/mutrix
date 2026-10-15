@@ -14,7 +14,8 @@ import {
   PanelRightOpen,
 } from "lucide-react";
 import type { Report } from "../shared/types";
-import { attachSummaries, parseSummaries } from "../shared/summaries";
+import { attachDocument, parseSummaries } from "../shared/summaries";
+import { projectPlan } from "../shared/plans";
 import { buildLayout, parentChain, reportIndex, type Filters } from "./chart/layout";
 import { MatrixChart } from "./chart/MatrixChart";
 import { identityCamera, type ChartCamera } from "./chart/camera";
@@ -30,7 +31,7 @@ interface ViewSnapshot {
   selected: string;
   camera: ChartCamera;
   filters: Filters;
-  changes: boolean;
+  mode: "structure" | "changes" | "plan";
 }
 
 export function App({ initialReport }: { initialReport: Report }) {
@@ -40,7 +41,15 @@ export function App({ initialReport }: { initialReport: Report }) {
   const [history, setHistory] = useState<ViewSnapshot[]>([]);
   const currentCamera = useRef<ChartCamera>(identityCamera());
   const [initialCamera, setInitialCamera] = useState<ChartCamera>(currentCamera.current);
-  const [changes, setChanges] = useState(report.meta.mode === "changes");
+  const [mode, setMode] = useState<ViewSnapshot["mode"]>(report.plan ? "plan" : report.meta.mode);
+  const changes = mode !== "structure";
+  const displayReport = useMemo(
+    () =>
+      mode === "plan" && report.plan
+        ? { ...report, nodes: projectPlan(report, report.plan).nodes }
+        : report,
+    [report, mode],
+  );
   const [warnLoc, setWarnLoc] = useState(DEFAULT_WARN_LOC);
   const [filters, setFilters] = useState<Filters>({ changed: false, extension: "", sort: "path" });
   const [left, setLeft] = useState(() => window.innerWidth > 600),
@@ -50,7 +59,7 @@ export function App({ initialReport }: { initialReport: Report }) {
   const [notice, setNotice] = useState("");
   const [diagnostics, setDiagnostics] = useState(false);
   const summaryInput = useRef<HTMLInputElement>(null);
-  const index = useMemo(() => reportIndex(report), [report]);
+  const index = useMemo(() => reportIndex(displayReport), [displayReport]);
   const layout = useMemo(
     () => buildLayout(index, focus, filters, !changes),
     [index, focus, filters, changes],
@@ -77,7 +86,7 @@ export function App({ initialReport }: { initialReport: Report }) {
     if (id !== focus) {
       setHistory((previous) => [
         ...previous,
-        { focus, selected, camera: { ...currentCamera.current }, filters: { ...filters }, changes },
+        { focus, selected, camera: { ...currentCamera.current }, filters: { ...filters }, mode },
       ]);
       setFocus(id);
     }
@@ -90,7 +99,7 @@ export function App({ initialReport }: { initialReport: Report }) {
     setFocus(previous.focus);
     setSelected(previous.selected);
     setFilters(previous.filters);
-    setChanges(previous.changes);
+    setMode(previous.mode);
     setInitialCamera({ ...previous.camera });
     setHistory(history.slice(0, -1));
   };
@@ -105,21 +114,30 @@ export function App({ initialReport }: { initialReport: Report }) {
         document.body.append(link);
         link.click();
         link.remove();
-      } else setNotice("삭제된 파일은 열 수 없습니다.");
+      } else setNotice("삭제되었거나 아직 생성하지 않은 파일은 열 수 없습니다.");
       return;
     }
     if (id === focus && history.length) goBack();
     else focusNode(id);
   };
+  const changeMode = (next: ViewSnapshot["mode"]) => {
+    setMode(next);
+    setFocus(report.rootId);
+    setSelected(report.rootId);
+    setHistory([]);
+    setFilters({ ...filters, changed: false });
+    setInitialCamera(identityCamera());
+  };
   const importSummaries = async (file?: File) => {
     if (!file) return;
     try {
       const doc = parseSummaries(JSON.parse(await file.text()));
-      const nodes = report.nodes.map((node) => ({ ...node }));
-      const addedDiagnostics = attachSummaries(nodes, doc);
-      setReport({ ...report, nodes, diagnostics: [...report.diagnostics, ...addedDiagnostics] });
+      const next = { ...report, nodes: report.nodes.map((node) => ({ ...node })) };
+      const addedDiagnostics = attachDocument(next, doc);
+      setReport({ ...next, diagnostics: [...report.diagnostics, ...addedDiagnostics] });
+      if (next.plan !== report.plan) changeMode("plan");
       setNotice(
-        `${doc.entries.length - addedDiagnostics.length}개 설명을 불러왔습니다.${addedDiagnostics.length ? ` ${addedDiagnostics.length}개 진단을 확인하세요.` : ""}`,
+        `${doc.entries.length}개 ${doc.mode === "plan" || doc.entries.some((entry) => entry.plan || entry.create) ? "계획 항목" : "설명"}을 불러왔습니다.${addedDiagnostics.length ? ` ${addedDiagnostics.length}개 진단을 확인하세요.` : ""}`,
       );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error));
@@ -154,43 +172,52 @@ export function App({ initialReport }: { initialReport: Report }) {
         <div className="project-context" title={report.meta.rootPath}>
           <span className="project-label">{report.meta.name}</span>
           {report.meta.branch && <span className="branch-label">{report.meta.branch}</span>}
-          {report.meta.mode === "changes" && (
-            <span className="comparison-base" aria-label="Comparison base">
-              {report.meta.baseRef}@{report.meta.baseCommit?.slice(0, 7)} → 작업 폴더
-            </span>
+          {mode === "plan" ? (
+            <span className="comparison-base">현재 스냅샷 → 계획 · 추정</span>
+          ) : (
+            report.meta.mode === "changes" && (
+              <span className="comparison-base" aria-label="Comparison base">
+                {report.meta.baseRef}@{report.meta.baseCommit?.slice(0, 7)} → 작업 폴더
+              </span>
+            )
           )}
         </div>
         <div className="mode-switch">
           <button
-            className={!changes ? "active" : ""}
-            onClick={() => {
-              setChanges(false);
-              setFilters({ ...filters, changed: false });
-            }}
+            className={mode === "structure" ? "active" : ""}
+            onClick={() => changeMode("structure")}
           >
             Structure
           </button>
           <button
             disabled={report.meta.mode !== "changes"}
-            className={changes ? "active" : ""}
-            onClick={() => setChanges(true)}
+            className={mode === "changes" ? "active" : ""}
+            onClick={() => changeMode("changes")}
           >
             Changes
           </button>
+          <button
+            disabled={!report.plan}
+            className={mode === "plan" ? "active" : ""}
+            onClick={() => changeMode("plan")}
+            title="계획 JSON을 불러오면 사용할 수 있습니다"
+          >
+            Plan
+          </button>
         </div>
         {changes && (
-          <div className="chart-legend">
+          <div className={`chart-legend ${mode === "plan" ? "plan-legend" : ""}`}>
             <span>
               <i className="legend-increase" />
-              증가
+              {mode === "plan" ? "예정 추가" : "증가"}
             </span>
             <span>
               <i className="legend-decrease" />
-              감소
+              {mode === "plan" ? "예정 삭제" : "감소"}
             </span>
             <span>
               <i className="legend-modified" />
-              동일 LOC 수정
+              {mode === "plan" ? "설명 / 동일 LOC 계획" : "동일 LOC 수정"}
             </span>
             <span>
               <i className="legend-unchanged" />
@@ -210,12 +237,12 @@ export function App({ initialReport }: { initialReport: Report }) {
             className="summary-import"
             variant="ghost"
             size="sm"
-            aria-label="Summary 불러오기"
-            title="Summary 불러오기"
+            aria-label="Summary / 계획 불러오기"
+            title="Summary / 계획 불러오기"
             onClick={() => summaryInput.current?.click()}
           >
             <FileUp />
-            <span className="summary-label">Summary 불러오기</span>
+            <span className="summary-label">Summary / 계획 불러오기</span>
           </Button>
           <Button
             variant="ghost"
@@ -247,7 +274,7 @@ export function App({ initialReport }: { initialReport: Report }) {
         {left && (
           <Explorer
             warnLoc={warnLoc}
-            nodes={report.nodes}
+            nodes={displayReport.nodes}
             index={index}
             rootId={report.rootId}
             selected={selected}
