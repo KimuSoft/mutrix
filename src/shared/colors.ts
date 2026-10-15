@@ -17,8 +17,9 @@ export function nodeFill(node: ReportNode, changes: boolean, dark: boolean): str
     return dark ? "#404040" : "#d4d4d4";
   }
   if (node.plan) {
-    if (node.added) return planColor("added", dark);
-    if (node.removed) return planColor("removed", dark);
+    const rate = growth(node);
+    if (rate !== 0)
+      return planColor(rate > 0 ? "added" : "removed", dark, Math.min(1, Math.abs(rate)));
     return dark ? "#525252" : "#d4d4d4";
   }
   const rate = growth(node);
@@ -32,8 +33,10 @@ export function nodeFill(node: ReportNode, changes: boolean, dark: boolean): str
   }
   return dark ? "#525252" : "#d4d4d4";
 }
-export function planColor(direction: "added" | "removed", dark: boolean): string {
-  return direction === "added" ? (dark ? "#1d4ed8" : "#bfdbfe") : dark ? "#9d174d" : "#fbcfe8";
+export function planColor(direction: "added" | "removed", dark: boolean, strength = 1): string {
+  return direction === "added"
+    ? mix(dark ? [38, 49, 74] : [219, 234, 254], dark ? [29, 78, 216] : [37, 99, 235], strength)
+    : mix(dark ? [70, 51, 37] : [255, 237, 213], dark ? [166, 95, 43] : [253, 186, 116], strength);
 }
 function mix(a: number[], b: number[], t: number) {
   return `rgb(${a.map((value, i) => Math.round(value + (b[i] - value) * t)).join(",")})`;

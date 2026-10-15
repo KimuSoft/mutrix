@@ -121,7 +121,7 @@ JSON 보고서는 `schemaVersion`, `meta`, `rootId`, `nodes`, `diagnostics`로 �
     {
       "nodeId": "file:src/parser.ts",
       "summary": "검증 로직을 별도 파일로 옮깁니다.",
-      "plan": { "added": 20, "removed": 100 }
+      "plan": { "delta": -80 }
     },
     {
       "nodeId": "plan:validation",
@@ -132,7 +132,7 @@ JSON 보고서는 `schemaVersion`, `meta`, `rootId`, `nodes`, `diagnostics`로 �
         "name": "validation.ts",
         "path": "src/validation.ts"
       },
-      "plan": { "added": 120, "removed": 0 }
+      "plan": { "delta": 120 }
     }
   ]
 }
@@ -148,19 +148,42 @@ mutrix.exe . --summaries plan.json --json artifacts/planned.json --output artifa
 
 CLI의 `--summaries` 또는 화면의 **Summary / 계획 불러오기**에서 같은 문서를 받으며 자동으로 Plan 보기로 전환합니다. 이후 Structure·Changes·Plan을 전환해 볼 수 있습니다. 계획 불러오기는 이전 계획을 교체하며 일반 Summary는 실제 변경 설명에 적용됩니다. HTML에 포함된 계획은 다른 경로로 옮겨도 오프라인으로 동작합니다. 보고서 JSON은 원본 `nodes`와 별도 `plan` 문서를 저장하며 실제 분석 수치를 덮어쓰지 않습니다. 기준 스냅샷 이후 코드가 바뀌면 계획과 추정치를 다시 검토해야 합니다.
 
-- 파란색은 예정 추가, 분홍색은 예정 삭제입니다. 두 작업이 있으면 색상과 `+추가 / −삭제` 배지를 함께 표시하며 순증감 0도 숨기지 않습니다.
-- 예상 LOC는 `현재 + 예정 추가 − 예정 삭제`로 계산하고 `130 → 약 200 LOC`로 표시합니다. 삭제만 계획한 영역도 높이를 유지합니다. 부모 높이는 말단별 `max(현재, 예상)`의 합이며 필터·확대·LOD는 같은 수치를 사용합니다.
+- `plan.delta`는 부호 있는 정수입니다. `+80`은 80줄 증가, `-30`은 30줄 감소 예상입니다(JSON 양수는 `80`으로 씁니다). 양수는 파란색, 음수는 오렌지색이며 기존 LOC 대비 변화율 100%에서 가장 진합니다. 노드에는 순증감 배지 하나만 표시하고 0은 중립색으로 유지합니다.
+- 예상 LOC는 `현재 + delta`로 계산하고 `130 → 약 200 LOC`로 표시합니다. 삭제만 계획한 영역도 높이를 유지합니다. 부모 높이는 말단별 `max(현재, 예상)`의 합이며 필터·확대·LOD는 같은 수치를 사용합니다.
 - 줄 수 없는 설명도 허용합니다. 기존 높이를 유지하고 `PLAN`·`규모 미정`으로 표시하며 0 LOC 가상 노드는 트리·검색에서 접근합니다. 추정치는 AI가 제공한 값이며 실제 diff나 품질 점수가 아닙니다.
 - 노드 전체에 추정치를 지정하면 그 아래 기존 심볼은 계획 보기에서 접어 한 영역으로 표시합니다. 하위 분량을 임의로 배분하지 않습니다. 조상·자손 항목이 겹치면 조상 추정치를 건너뛰고 진단을 남겨 자손 항목을 보존합니다.
-- 음수·소수 추정치, 현재 LOC보다 큰 삭제량, 잘못된 부모·경로, 중복·모르는 ID는 오류 또는 진단으로 표시합니다. 부분 삭제와 파일 자체의 삭제 여부를 추정치만으로 구분할 수 없으므로 `−현재 LOC`도 예정 삭제량으로 표시합니다.
+- 소수·안전 정수 범위 밖의 추정치, 현재 LOC보다 큰 감소량, 잘못된 부모·경로, 중복·모르는 ID는 오류 또는 진단으로 표시합니다. 부분 삭제와 파일 자체의 삭제 여부를 추정치만으로 구분할 수 없으므로 `−현재 LOC`도 예정 삭제량으로 표시합니다.
+
+함수 계약은 `plan.signature`로 제안합니다. 현재 함수 스코프의 보고서 ID 또는 새 `create.kind: "scope"` 항목에 적용할 수 있습니다. `delta`를 생략하면 현재 높이를 유지하며 계약만 제안합니다. 일반 파일·폴더·클래스에는 함수 계약을 붙이지 않습니다.
+
+```json
+{
+  "nodeId": "scope:src/parser.ts#function:parse~1",
+  "summary": "옵션을 받아 파싱 결과를 반환하도록 계약을 변경합니다.",
+  "plan": {
+    "delta": 20,
+    "signature": {
+      "parameters": [
+        { "name": "text", "type": "string" },
+        { "name": "options", "type": "TestOptions", "optional": true }
+      ],
+      "returnType": "string"
+    }
+  }
+}
+```
+
+`optional`·`rest`는 생략하면 false입니다. 제안한 인자·반환 타입은 노드 안에 **제안 계약** 표시와 기존 타입 배지·디바이더 형태로 나타납니다. 현재 시그니처와 원본 분석 결과는 유지합니다. 타입은 일반 텍스트 제안이며 타입 검사나 코드 수정은 수행하지 않습니다. 작은 영역은 확대하면 계약이 표시됩니다.
 
 [examples/plan.json](examples/plan.json)은 Mutrix 자체 보고서에서 불러올 수 있는 가상 계획 예시입니다.
 
-## Codex로 PR 결과 확인
+## Codex로 변경 검토와 계획 제안
 
 레포에 [mutrix-pr-review](.agents/skills/mutrix-pr-review/SKILL.md) 스킬이 포함되어 있습니다. `.agents/skills`는 [OpenAI 공식 문서](https://learn.chatgpt.com/docs/build-skills)의 레포 스킬 위치를 따릅니다. Codex에서 `$mutrix-pr-review로 이 PR의 결과를 확인하고 Summary가 붙은 HTML 보고서를 만들어줘`처럼 요청하면 사용합니다.
 
 PR head·기준 ref 확인 → JSON 분석 → 실제 diff 검토 → 노드 ID로 Summary 작성 → HTML에 설명 내장 순서로 진행합니다. 미커밋 변경이 섞인 결과는 작업 폴더 스냅샷으로 구분하며, 리뷰 결과를 원격에 게시하지 않습니다. 다른 레포에서 쓰려면 `mutrix-pr-review` 폴더를 해당 레포의 `.agents/skills/` 또는 개인 스킬 폴더에 복사하고 Mutrix 실행 파일 경로를 알려주세요.
+
+`$mutrix-pr-review로 현재 코드 기준의 변경 계획을 Mutrix 보고서로 제안해줘. 함수 계약도 포함해줘`처럼 구현 전 계획에도 사용할 수 있습니다. 스냅샷 JSON → 부호 있는 `delta`·새 노드·`signature` 계획 JSON → Plan HTML 순서로 생성합니다. 스킬의 [계획 안내](.agents/skills/mutrix-pr-review/references/planning.md)에 실행 예시와 검증 규칙이 있습니다. 설치만으로 모든 PR에 보고서를 자동 생성하지는 않습니다.
 
 ## 분석 대상과 v1 경계
 

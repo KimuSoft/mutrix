@@ -5,7 +5,9 @@
     {
       "nodeId": "file:src/shared/summaries.ts",
       "summary": "예시 계획: 입력 검증을 별도 모듈로 분리하고 호출부를 정리합니다. 실제 구현 예정 사항은 아닙니다.",
-      "plan": { "added": 10, "removed": 20 }
+      "plan": {
+        "delta": -10
+      }
     },
     {
       "nodeId": "plan:summary-validation",
@@ -15,8 +17,34 @@
         "kind": "file",
         "name": "summary-validation.ts",
         "path": "src/shared/summary-validation.ts"
+      }
+    },
+    {
+      "nodeId": "plan:validate-summary",
+      "summary": "예시 계약: Summary 입력을 검증해 설명 문서를 반환합니다. 실제 구현 예정 사항은 아닙니다.",
+      "create": {
+        "parentId": "plan:summary-validation",
+        "kind": "scope",
+        "name": "validateSummary",
+        "path": "src/shared/summary-validation.ts"
       },
-      "plan": { "added": 80, "removed": 0 }
+      "plan": {
+        "delta": 80,
+        "signature": {
+          "parameters": [
+            {
+              "name": "text",
+              "type": "string"
+            },
+            {
+              "name": "options",
+              "type": "ValidationOptions",
+              "optional": true
+            }
+          ],
+          "returnType": "SummaryDocument"
+        }
+      }
     },
     {
       "nodeId": "folder:src/viewer",

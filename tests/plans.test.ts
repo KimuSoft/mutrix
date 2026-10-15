@@ -59,25 +59,25 @@ const document = (entries: SummaryEntry[]): SummaryDocument => ({
   mode: "plan",
   entries,
 });
-const entry = (nodeId: string, added: number, removed: number): SummaryEntry => ({
+const entry = (nodeId: string, delta: number): SummaryEntry => ({
   nodeId,
   summary: "계획 설명",
-  plan: { added, removed },
+  plan: { delta },
 });
 const filters = { changed: false, extension: "", sort: "path" } as const;
 
 test("planning uses current LOC, keeps actual metrics immutable, and preserves deletion area", () => {
   const report = snapshot();
   const original = JSON.stringify(report);
-  const result = projectPlan(report, document([entry("scope:a", 20, 60)]));
+  const result = projectPlan(report, document([entry("scope:a", -40)]));
   expect(result.diagnostics).toEqual([]);
   const index = reportIndex({ ...report, nodes: result.nodes });
   expect(index.has("file:old.ts")).toBe(false);
   expect(index.get("scope:a")).toMatchObject({
     beforeLoc: 60,
     afterLoc: 20,
-    added: 20,
-    removed: 60,
+    added: 0,
+    removed: 40,
     weight: 60,
   });
   expect(index.get(report.rootId)).toMatchObject({ beforeLoc: 100, afterLoc: 60, weight: 100 });
@@ -86,7 +86,7 @@ test("planning uses current LOC, keeps actual metrics immutable, and preserves d
     buildLayout(index, report.rootId, { ...filters, changed: true })!.root.data.beforeLoc,
   ).toBe(60);
   expect(JSON.stringify(report)).toBe(original);
-  const deleted = projectPlan(report, document([entry("file:a.ts", 0, 100)])).nodes.find(
+  const deleted = projectPlan(report, document([entry("file:a.ts", -100)])).nodes.find(
     (node) => node.id === "file:a.ts",
   )!;
   expect(deleted).toMatchObject({ beforeLoc: 100, afterLoc: 0, weight: 100, children: [] });
@@ -97,7 +97,7 @@ test("new parents resolve in any order; forecasts aggregate without changing fil
   const report = snapshot();
   const doc = document([
     {
-      ...entry("plan:new.ts", 50, 0),
+      ...entry("plan:new.ts", 50),
       create: { parentId: "plan:lib", kind: "file", name: "new.ts", path: "lib/new.ts" },
     },
     {
@@ -105,7 +105,7 @@ test("new parents resolve in any order; forecasts aggregate without changing fil
       summary: "새 모듈",
       create: { parentId: report.rootId, kind: "folder", name: "lib", path: "lib" },
     },
-    entry("file:a.ts", 0, 30),
+    entry("file:a.ts", -30),
   ]);
   const result = projectPlan(report, doc);
   expect(result.diagnostics).toEqual([]);
@@ -132,7 +132,7 @@ test("new nested scopes preserve an existing leaf's owned lines", () => {
     report,
     document([
       {
-        ...entry("plan:nested", 15, 0),
+        ...entry("plan:nested", 15),
         create: { parentId: "scope:a", kind: "scope", name: "nested", path: "a.ts" },
       },
     ]),
@@ -153,7 +153,7 @@ test("a repository with all files deleted can still plan new files at its root",
     report,
     document([
       {
-        ...entry("plan:restart", 10, 0),
+        ...entry("plan:restart", 10),
         create: { parentId: report.rootId, kind: "file", name: "restart.ts", path: "restart.ts" },
       },
     ]),
@@ -170,7 +170,7 @@ test("description-only plans keep height and are searchable; overlapping estimat
   const report = snapshot();
   const result = projectPlan(
     report,
-    document([entry("file:a.ts", 100, 0), { nodeId: "scope:a", summary: "규모는 아직 미정" }]),
+    document([entry("file:a.ts", 100), { nodeId: "scope:a", summary: "규모는 아직 미정" }]),
   );
   expect(result.diagnostics[0].message).toContain("Overlapping");
   const scope = result.nodes.find((node) => node.id === "scope:a")!;
@@ -188,15 +188,15 @@ test("invalid estimates, unknown/duplicate IDs and cyclic parents produce diagno
   const result = projectPlan(
     report,
     document([
-      entry("scope:a", 0, 61),
-      entry("scope:a", 50, 0),
-      entry("missing", 1, 0),
+      entry("scope:a", -61),
+      entry("scope:a", 50),
+      entry("missing", 1),
       {
-        ...entry("plan:cycle", 10, 0),
+        ...entry("plan:cycle", 10),
         create: { parentId: "plan:cycle", kind: "folder", name: "cycle", path: "cycle" },
       },
       {
-        ...entry("plan:bad", 10, 0),
+        ...entry("plan:bad", 10),
         create: { parentId: report.rootId, kind: "file", name: "bad.ts", path: "other.ts" },
       },
     ]),
@@ -204,20 +204,21 @@ test("invalid estimates, unknown/duplicate IDs and cyclic parents produce diagno
   expect(result.diagnostics).toHaveLength(5);
   expect(result.nodes.find((node) => node.id === report.rootId)!.afterLoc).toBe(100);
   for (const plan of [
-    { added: -1, removed: 0 },
-    { added: 0.1, removed: 0 },
-    { added: Infinity, removed: 0 },
+    { delta: 0.1 },
+    { delta: Infinity },
+    { delta: "10" },
+    { added: 10, removed: 0 },
     null,
   ]) {
     expect(() =>
-      parseSummaries(document([{ ...entry("scope:a", 0, 0), plan } as SummaryEntry])),
+      parseSummaries(document([{ ...entry("scope:a", 0), plan } as SummaryEntry])),
     ).toThrow();
   }
   expect(() =>
     parseSummaries(
       document([
         {
-          ...entry("plan:x", 1, 0),
+          ...entry("plan:x", 1),
           create: { parentId: report.rootId, kind: "file", name: "x", path: "../x" },
         },
       ]),
@@ -229,7 +230,7 @@ test("CLI attachment embeds a plan without overwriting real summaries or unsafe 
   const report = snapshot();
   report.nodes[0].summary = "실제 변경";
   const doc = parseSummaries(
-    document([{ ...entry("file:a.ts", 10, 10), summary: "</script><img src=x>" }]),
+    document([{ ...entry("file:a.ts", 0), summary: "</script><img src=x>" }]),
   );
   const original = JSON.stringify(report.nodes);
   expect(attachDocument(report, doc)).toEqual([]);
@@ -244,7 +245,7 @@ test("CLI attachment embeds a plan without overwriting real summaries or unsafe 
   ) as Report;
   expect(restored.plan).toEqual(doc);
   const node = projectPlan(restored, restored.plan!).nodes.find((node) => node.id === "file:a.ts")!;
-  expect(nodeBadges(node, true)).toEqual(["+10", "−10"]);
+  expect(nodeBadges(node, true)).toEqual(["PLAN"]);
   expect(node).toMatchObject({ delta: 0, status: "modified", weight: 100 });
   expect(
     attachDocument(report, {
@@ -267,10 +268,10 @@ test("zero-LOC virtual nodes remain accessible; existing paths and unsafe totals
         create: { parentId: report.rootId, kind: "file", name: "empty.ts", path: "empty.ts" },
       },
       {
-        ...entry("plan:duplicate-path", 10, 0),
+        ...entry("plan:duplicate-path", 10),
         create: { parentId: report.rootId, kind: "file", name: "a.ts", path: "a.ts" },
       },
-      entry("scope:a", Number.MAX_SAFE_INTEGER, 0),
+      entry("scope:a", Number.MAX_SAFE_INTEGER),
     ]),
   );
   expect(result.diagnostics).toHaveLength(2);
@@ -279,40 +280,49 @@ test("zero-LOC virtual nodes remain accessible; existing paths and unsafe totals
   expect(buildLayout(index, report.rootId, filters)!.total).toBe(100);
 });
 
-test("Canvas and LOD retain both planning colors when net change is zero", () => {
+test("Canvas and LOD use the net sign with relative intensity and neutral zero", () => {
   const report = snapshot();
-  const { nodes } = projectPlan(report, document([entry("file:a.ts", 10, 10)]));
-  const layout = buildLayout(reportIndex({ ...report, nodes }), report.rootId, filters)!;
-  const items = visibleItems(layout.root, {
-    left: 0,
-    right: layout.width,
-    top: 0,
-    bottom: 100,
-    pixelsPerLine: 0.01,
-  });
-  for (const dark of [true, false]) {
-    const fills: { color: string; width: number }[] = [];
-    const ctx = {
-      fillStyle: "",
-      clearRect() {},
-      strokeRect() {},
-      fillRect(_x: number, _y: number, width: number) {
-        fills.push({ color: this.fillStyle, width });
-      },
-    };
-    paint(ctx as unknown as CanvasRenderingContext2D, items, {
-      width: 500,
-      height: 10,
-      columns: { scale: 1, width: layout.width, positions: new Map() },
-      lineScale: 0.1,
-      camera: { x: 0, y: 0, kx: 1, ky: 1 },
-      changes: true,
-      dark,
+  for (const delta of [-100, -25, 0, 25, 100]) {
+    const { nodes } = projectPlan(report, document([entry("file:a.ts", delta)]));
+    const layout = buildLayout(reportIndex({ ...report, nodes }), report.rootId, filters)!;
+    const items = visibleItems(layout.root, {
+      left: 0,
+      right: layout.width,
+      top: 0,
+      bottom: layout.total,
+      pixelsPerLine: 0.01,
     });
-    for (const direction of ["added", "removed"] as const)
-      expect(
-        fills.some((fill) => fill.color === planColor(direction, dark) && fill.width > 0),
-      ).toBe(true);
+    for (const dark of [true, false]) {
+      const fills: string[] = [];
+      const ctx = {
+        fillStyle: "",
+        clearRect() {},
+        strokeRect() {},
+        fillRect() {
+          fills.push(this.fillStyle);
+        },
+      };
+      paint(ctx as unknown as CanvasRenderingContext2D, items, {
+        width: 500,
+        height: 20,
+        columns: { scale: 1, width: layout.width, positions: new Map() },
+        lineScale: 0.05,
+        camera: { x: 0, y: 0, kx: 1, ky: 1 },
+        changes: true,
+        dark,
+      });
+      const expected =
+        delta === 0
+          ? dark
+            ? "#525252"
+            : "#d4d4d4"
+          : planColor(delta > 0 ? "added" : "removed", dark, Math.abs(delta) / 100);
+      expect(fills).toContain(expected);
+    }
+    const file = nodes.find((node) => node.id === "file:a.ts")!;
+    expect(nodeBadges(file, true)).toEqual(
+      delta ? [delta > 0 ? `+${delta}` : `−${-delta}`] : ["PLAN"],
+    );
   }
 });
 
@@ -324,7 +334,7 @@ test("embedded plans render the Plan view, estimated totals and current snapshot
   });
   try {
     const report = snapshot();
-    attachDocument(report, document([entry("file:a.ts", 10, 20)]));
+    attachDocument(report, document([entry("file:a.ts", -10)]));
     const markup = renderToStaticMarkup(createElement(App, { initialReport: report }));
     expect(markup).toContain('class="active" title="계획 JSON');
     expect(markup).toContain("현재 스냅샷 → 계획 · 추정");
@@ -336,4 +346,111 @@ test("embedded plans render the Plan view, estimated totals and current snapshot
     if (previous) Object.defineProperty(globalThis, "window", previous);
     else Reflect.deleteProperty(globalThis, "window");
   }
+});
+
+test("function contracts can be proposed on current and new scopes without editing actual signatures", () => {
+  const report = snapshot();
+  const scope = report.nodes.find((node) => node.id === "scope:a")!;
+  scope.signature = {
+    after: {
+      parameters: [{ name: "old", type: "number", optional: false, rest: false }],
+      returnType: "void",
+    },
+  };
+  const original = JSON.stringify(report);
+  const signature = {
+    parameters: [
+      { name: "text", type: "string" },
+      { name: "options", type: "TestOptions", optional: true },
+    ],
+    returnType: "string",
+  };
+  const doc = parseSummaries(
+    document([
+      { nodeId: scope.id, summary: "", plan: { signature } },
+      {
+        ...entry("plan:format", 30),
+        create: { parentId: "file:a.ts", kind: "scope", name: "format", path: "a.ts" },
+        plan: { delta: 30, signature },
+      },
+    ]),
+  );
+  const result = projectPlan(report, doc);
+  expect(result.diagnostics).toEqual([]);
+  const projected = result.nodes.find((node) => node.id === scope.id)!;
+  expect(projected.signature?.before).toEqual(scope.signature.after);
+  expect(projected.signature?.after).toEqual({
+    ...signature,
+    parameters: signature.parameters.map((parameter) => ({
+      ...parameter,
+      optional: !!parameter.optional,
+      rest: false,
+    })),
+  });
+  expect(projected.plan).toMatchObject({ proposedSignature: true });
+  expect(projected.plan?.estimated).toBeFalsy();
+  expect(nodeBadges(projected, true)).toEqual(["PLAN"]);
+  const virtual = result.nodes.find((node) => node.id === "plan:format")!;
+  expect(virtual.signature?.before).toBeUndefined();
+  expect(virtual.signature?.after).toEqual(projected.signature?.after);
+  expect(JSON.stringify(report)).toBe(original);
+  const index = reportIndex({ ...report, nodes: result.nodes });
+  expect(buildLayout(index, report.rootId, { ...filters, changed: true })!.root.data.afterLoc).toBe(
+    90,
+  );
+  const layout = buildLayout(index, scope.id, filters)!;
+  const items = visibleItems(layout.root, {
+    left: 0,
+    right: layout.width,
+    top: 0,
+    bottom: layout.total,
+    pixelsPerLine: 5,
+  });
+  const texts: string[] = [];
+  const context = new Proxy(
+    {
+      globalAlpha: 1,
+      fillStyle: "#000",
+      measureText: (text: string) => ({ width: text.length * 5 }),
+      fillText: (text: string) => texts.push(text),
+    },
+    {
+      get(target, key) {
+        return key in target ? Reflect.get(target, key) : () => {};
+      },
+    },
+  );
+  paint(context as unknown as CanvasRenderingContext2D, items, {
+    width: 220,
+    height: 300,
+    columns: { scale: 2.2, width: 220, positions: new Map() },
+    lineScale: 5,
+    camera: { x: 0, y: 0, kx: 1, ky: 1 },
+    changes: true,
+    dark: false,
+  });
+  for (const text of ["제안 계약", "text", "string", "options?", "TestOptions", "return"])
+    expect(texts).toContain(text);
+});
+
+test("contract proposals validate parameter types and only apply to function scopes", () => {
+  const signature = { parameters: [], returnType: "string" };
+  const result = projectPlan(
+    snapshot(),
+    document([{ nodeId: "file:a.ts", summary: "", plan: { signature } }]),
+  );
+  expect(result.diagnostics[0].message).toContain("function scope");
+  for (const invalid of [
+    null,
+    { parameters: [], returnType: "" },
+    { parameters: [{ name: "x", type: 3 }], returnType: "void" },
+    { parameters: [{ name: "x", type: "string", rest: "true" }], returnType: "void" },
+  ])
+    expect(() =>
+      parseSummaries({
+        schemaVersion: 1,
+        mode: "plan",
+        entries: [{ nodeId: "scope:a", summary: "", plan: { signature: invalid } }],
+      }),
+    ).toThrow();
 });

@@ -2,7 +2,7 @@ import { color } from "d3-color";
 import type { FunctionSignature } from "../../shared/types";
 import type { DrawItem } from "./lod";
 import type { ChartCamera } from "./camera";
-import { nodeFill, planColor } from "../../shared/colors";
+import { nodeFill } from "../../shared/colors";
 import type { ColumnGeometry } from "./columns";
 import { fileIcon } from "../lib/file-icons";
 import { fitText, wrapText, nodeBadges, folderHasDescription, type NodeBadgeLabel } from "./labels";
@@ -220,21 +220,32 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
     const hovered = item.nodes.some((n) => n.data.node.id === options.hovered);
     const textOpacity = residual && !selected && !hovered ? 0.5 : 1;
     ctx.globalAlpha = (changes && unchanged ? 0.24 : 1) * (residual ? 0.4 : 1);
-    const visibleData = item.nodes[0].data;
+    const visibleData =
+      item.aggregate && node.plan
+        ? item.nodes.reduce(
+            (total, item) => ({
+              beforeLoc: total.beforeLoc + item.data.beforeLoc,
+              afterLoc: total.afterLoc + item.data.afterLoc,
+            }),
+            { beforeLoc: 0, afterLoc: 0 },
+          )
+        : item.nodes[0].data;
     ctx.fillStyle = nodeFill(
-      node.plan ? { ...node, added: visibleData.added, removed: visibleData.removed } : node,
+      node.plan
+        ? { ...node, beforeLoc: visibleData.beforeLoc, afterLoc: visibleData.afterLoc }
+        : node,
       changes,
       dark,
     );
     ctx.fillRect(x, y, w, h);
-    if (item.aggregate || node.plan) {
+    if (item.aggregate && !node.plan) {
       const additions = item.nodes.reduce((sum, n) => sum + n.data.added, 0);
       const removals = item.nodes.reduce((sum, n) => sum + n.data.removed, 0);
       if (changes && additions + removals > 0) {
         const split = (w * additions) / (additions + removals);
-        ctx.fillStyle = node.plan ? planColor("added", dark) : dark ? "#248951" : "#288b4c";
+        ctx.fillStyle = dark ? "#248951" : "#288b4c";
         ctx.fillRect(x, y, split, h);
-        ctx.fillStyle = node.plan ? planColor("removed", dark) : dark ? "#b54636" : "#c24c35";
+        ctx.fillStyle = dark ? "#b54636" : "#c24c35";
         ctx.fillRect(x + split, y, w - split, h);
       }
     }
@@ -362,17 +373,18 @@ export function paint(ctx: CanvasRenderingContext2D, items: DrawItem[], options:
     let bodyY = y + 53;
     if (!item.aggregate && w >= 100 && h >= 108) {
       const signature = node.status === "deleted" ? node.signature?.before : node.signature?.after;
-      if (signature) {
+      const maxRows = Math.min(
+        8,
+        Math.floor((bottom - bodyY - (node.plan?.proposedSignature ? 18 : 0) - 12) / 20),
+      );
+      if (signature && maxRows >= 3) {
         ctx.font = '11px "SUIT Variable", system-ui, sans-serif';
         ctx.globalAlpha = (changes && unchanged ? 0.65 : 0.85) * textOpacity;
-        bodyY = paintSignature(
-          ctx,
-          signature,
-          x + 10,
-          bodyY,
-          w - 20,
-          Math.min(8, Math.floor((h - 65) / 20)),
-        );
+        if (node.plan?.proposedSignature) {
+          ctx.fillText("제안 계약", x + 10, bodyY);
+          bodyY += 18;
+        }
+        bodyY = paintSignature(ctx, signature, x + 10, bodyY, w - 20, maxRows);
       }
     }
     if (description && w >= 100 && bottom - bodyY >= 15) {

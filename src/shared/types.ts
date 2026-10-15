@@ -35,7 +35,7 @@ export interface ReportNode {
   summary?: string;
   rename?: { path: string; nodeId: string };
   /** Present only in the derived planning view; snapshot metrics remain untouched. */
-  plan?: { added: number; removed: number; virtual?: boolean; estimated?: boolean };
+  plan?: { virtual?: boolean; estimated?: boolean; proposedSignature?: boolean };
 }
 export interface Diagnostic {
   level: "info" | "warning";
@@ -75,7 +75,13 @@ export interface SummaryDocument {
 export interface SummaryEntry {
   nodeId: string;
   summary: string;
-  plan?: { added: number; removed: number };
+  plan?: {
+    delta?: number;
+    signature?: {
+      parameters: { name: string; type: string; optional?: boolean; rest?: boolean }[];
+      returnType: string;
+    };
+  };
   create?: { parentId: string; kind: "folder" | "file" | "scope"; name: string; path: string };
 }
 export interface AnalyzeOptions {

@@ -202,32 +202,32 @@ button {
   background: #288b4c;
 }
 .plan-legend .legend-increase {
-  background: #bfdbfe;
+  background: #2563eb;
 }
 .plan-legend .legend-decrease {
-  background: #fbcfe8;
+  background: #fdba74;
 }
 .dark .plan-legend .legend-increase {
   background: #1d4ed8;
 }
 .dark .plan-legend .legend-decrease {
-  background: #9d174d;
+  background: #a65f2b;
 }
 .node-badge.planned {
   background: var(--accent);
   color: var(--foreground);
 }
-.planning-inspector .churn-row span:first-child {
+.delta.plan-increase {
   color: #2563eb;
 }
-.planning-inspector .churn-row span:last-child {
-  color: #db2777;
+.delta.plan-decrease {
+  color: #c2410c;
 }
-.dark .planning-inspector .churn-row span:first-child {
+.dark .delta.plan-increase {
   color: #93c5fd;
 }
-.dark .planning-inspector .churn-row span:last-child {
-  color: #f9a8d4;
+.dark .delta.plan-decrease {
+  color: #fdba74;
 }
 .legend-decrease {
   background: #c24c35;

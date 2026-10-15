@@ -34,7 +34,12 @@ export function buildLayout(
   const collect = (id: string, planContext = false): LayoutData | undefined => {
     const node = index.get(id)!;
     const keepContext =
-      planContext || !!(node.plan && node.summary?.trim() && !node.plan.estimated);
+      planContext ||
+      !!(
+        node.plan &&
+        (node.summary?.trim() || node.plan.proposedSignature) &&
+        !node.plan.estimated
+      );
     const children = node.children
       .map((child) => collect(child, keepContext))
       .filter((child): child is LayoutData => !!child);
